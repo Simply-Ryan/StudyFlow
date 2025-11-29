@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from functools import wraps
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
 
 app = Flask(__name__)
 app.secret_key = 'f47cba5d7844e3b4cc01994acb8de040c559faf14e9284d5530eeb02055d150b'
@@ -605,6 +607,79 @@ def respond_invitation(invitation_id):
     
     conn.close()
     return redirect(url_for('index'))
+
+# check for upcoming sessions and send automatic reminders
+def check_and_send_reminders():
+    """background task to check for sessions and send automatic reminders at 1 week, 1 day, 1 hour"""
+    conn = get_db()
+    now = datetime.now()
+    
+    # get all upcoming sessions that haven't been completed yet
+    sessions = conn.execute('''
+        SELECT id, title, session_date, creator_id
+        FROM sessions
+        WHERE session_date > ?
+    ''', (now.isoformat(),)).fetchall()
+    
+    for sess in sessions:
+        if not sess['session_date']:
+            continue
+        
+        try:
+            session_date = datetime.fromisoformat(sess['session_date'].replace('T', ' '))
+        except:
+            continue
+        
+        time_until = session_date - now
+        
+        # determine which reminder to send based on time remaining
+        reminder_type = None
+        reminder_text = None
+        
+        # 1 week reminder (between 7 days and 6 days 23 hours)
+        if timedelta(days=6, hours=23) <= time_until <= timedelta(days=7, hours=1):
+            reminder_type = 'week'
+            reminder_text = f'1 week until "{sess["title"]}" starts!'
+        # 1 day reminder (between 23 hours and 25 hours)
+        elif timedelta(hours=23) <= time_until <= timedelta(hours=25):
+            reminder_type = 'day'
+            reminder_text = f'1 day until "{sess["title"]}" starts!'
+        # 1 hour reminder (between 59 minutes and 61 minutes)
+        elif timedelta(minutes=59) <= time_until <= timedelta(minutes=61):
+            reminder_type = 'hour'
+            reminder_text = f'1 hour until "{sess["title"]}" starts!'
+        
+        if reminder_type and reminder_text:
+            # check if this reminder type has already been sent for this session
+            already_sent = conn.execute('''
+                SELECT id FROM auto_reminders_sent 
+                WHERE session_id = ? AND reminder_type = ?
+            ''', (sess['id'], reminder_type)).fetchone()
+            
+            if not already_sent:
+                # create the reminder
+                conn.execute('''
+                    INSERT INTO reminders (session_id, reminder_text, sent_by)
+                    VALUES (?, ?, ?)
+                ''', (sess['id'], reminder_text, sess['creator_id']))
+                
+                # mark this reminder type as sent
+                conn.execute('''
+                    INSERT INTO auto_reminders_sent (session_id, reminder_type)
+                    VALUES (?, ?)
+                ''', (sess['id'], reminder_type))
+                
+                conn.commit()
+    
+    conn.close()
+
+# set up background scheduler to run every 30 minutes
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=check_and_send_reminders, trigger="interval", minutes=30)
+scheduler.start()
+
+# shut down scheduler when app exits
+atexit.register(lambda: scheduler.shutdown())
 
 if __name__ == '__main__':
     app.run(debug=True)

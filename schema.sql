@@ -87,3 +87,12 @@ CREATE TABLE IF NOT EXISTS files (
     FOREIGN KEY (session_id) REFERENCES sessions(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS auto_reminders_sent (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    reminder_type TEXT NOT NULL,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sessions(id),
+    UNIQUE(session_id, reminder_type)
+);
