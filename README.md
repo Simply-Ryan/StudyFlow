@@ -2,10 +2,6 @@
 
 Web app to study with friends! Made for HackDécouverte (HackConcordia)!
 
-## Contributing
-
-This project was created for Hack Découverte. Contributions and suggestions are welcome!
-
 # Credits
 
 ### Team Name: The Goon Squad
