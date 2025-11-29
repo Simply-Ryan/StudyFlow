@@ -11,16 +11,13 @@ This project was created for Hack Découverte. Contributions and suggestions are
 ### Team Name: The Goon Squad
 
 ### Front-end
-Félix Hardy
-Stryker Pinchin
+Félix Hardy, Stryker Pinchin
 
 ### Back-end
-Ryan El Fani
-Rafael Ethan Olliver
+Ryan El Fani, Rafael Ethan Olliver
 
 ### Stress Test
-Stryker Pinchin
-Rafael Ethan Olliver
+Stryker Pinchin, Rafael Ethan Olliver
 
 ## Third-Party Libraries & Frameworks
 
