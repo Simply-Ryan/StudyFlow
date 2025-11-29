@@ -41,3 +41,4 @@ Rafael Ethan Olliver
 - **Python** - Programming language
 - **Git & GitHub** - Version control (used it for unnecessary things!)
 - **Visual Studio Code** - Code editor
+- **Stack Overflow, PythonAnywhere, W3Schools** - General Forums Scavenging and assistance

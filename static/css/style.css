@@ -1,3 +1,6 @@
+/* Align icon to the left inside the button */
+
+
 /* ============================================
    FILTER & SEARCH BAR STYLES
    ============================================ */
@@ -283,7 +286,6 @@ body {
     border: 2px solid;
     margin: 1rem 0;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    color: black 
 }
 
 .sessions-list h2 {
@@ -919,7 +921,7 @@ body {
 
 /* Session creator info */
 .session-creator {
-    color: #666;
+    color: #000000;
     font-size: 0.9em;
     margin-top: 5px;
 }

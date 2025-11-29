@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
+app.secret_key = 'f47cba5d7844e3b4cc01994acb8de040c559faf14e9284d5530eeb02055d150b'
 
 DATABASE = 'sessions.db'
 UPLOAD_FOLDER = 'uploads'
