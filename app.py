@@ -1,13 +1,25 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory
 import sqlite3
+import os
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
 DATABASE = 'sessions.db'
+UPLOAD_FOLDER = 'uploads'
+MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip', 'rar'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+
+# Create upload folder if it doesn't exist
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 # Login required decorator
 def login_required(f):
@@ -48,6 +60,20 @@ def format_time_remaining(session_date_str):
         return None
 
 app.jinja_env.globals.update(format_time_remaining=format_time_remaining)
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_file_size_str(size_bytes):
+    """Convert bytes to human readable format"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024.0
+    return f"{size_bytes:.1f} TB"
+
+app.jinja_env.globals.update(get_file_size_str=get_file_size_str)
 
 def get_db():
     conn = sqlite3.connect(DATABASE)
@@ -231,6 +257,15 @@ def detail(session_id):
         ORDER BY m.created_at ASC
     ''', (session_id,)).fetchall()
     
+    # Get uploaded files for this session
+    files = conn.execute('''
+        SELECT f.*, u.full_name, u.username
+        FROM files f
+        JOIN users u ON f.user_id = u.id
+        WHERE f.session_id = ?
+        ORDER BY f.uploaded_at DESC
+    ''', (session_id,)).fetchall()
+    
     # Get all users for invitation dropdown (exclude already invited/RSVP'd users)
     all_users = []
     if 'user_id' in session and study_session['creator_user_id'] == session['user_id']:
@@ -265,7 +300,7 @@ def detail(session_id):
     return render_template('detail.html', study_session=study_session, rsvps=rsvps, messages=messages,
                          current_count=current_count, max_participants=max_participants,
                          is_full=is_full, spots_left=spots_left, user_has_rsvp=user_has_rsvp,
-                         is_creator=is_creator, all_users=all_users)
+                         is_creator=is_creator, all_users=all_users, files=files)
 
 @app.route('/session/<int:session_id>/message', methods=['POST'])
 @login_required
@@ -320,7 +355,15 @@ def delete_session(session_id):
                                  (session_id,)).fetchone()
     
     if study_session and study_session['creator_id'] == session['user_id']:
-        # Delete related records first (foreign key constraints)
+        # Delete uploaded files first
+        files = conn.execute('SELECT filename FROM files WHERE session_id = ?', (session_id,)).fetchall()
+        for file in files:
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file['filename'])
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        
+        # Delete related records (foreign key constraints)
+        conn.execute('DELETE FROM files WHERE session_id = ?', (session_id,))
         conn.execute('DELETE FROM messages WHERE session_id = ?', (session_id,))
         conn.execute('DELETE FROM rsvps WHERE session_id = ?', (session_id,))
         conn.execute('DELETE FROM invitations WHERE session_id = ?', (session_id,))
@@ -379,6 +422,115 @@ def dismiss_reminder(reminder_id):
     
     conn.close()
     return redirect(url_for('index'))
+
+@app.route('/session/<int:session_id>/upload', methods=['POST'])
+@login_required
+def upload_file(session_id):
+    # Check if file is in request
+    if 'file' not in request.files:
+        flash('No file selected')
+        return redirect(url_for('detail', session_id=session_id))
+    
+    file = request.files['file']
+    
+    # Check if file is empty
+    if file.filename == '':
+        flash('No file selected')
+        return redirect(url_for('detail', session_id=session_id))
+    
+    # Check if user has RSVP'd to the session
+    conn = get_db()
+    rsvp = conn.execute('SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
+                       (session_id, session['user_id'])).fetchone()
+    
+    if not rsvp:
+        flash('You must RSVP to upload files to this session')
+        conn.close()
+        return redirect(url_for('detail', session_id=session_id))
+    
+    # Validate file
+    if file and allowed_file(file.filename):
+        # Generate secure filename with timestamp to avoid conflicts
+        original_filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{original_filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Save file
+        file.save(file_path)
+        
+        # Get file info
+        file_size = os.path.getsize(file_path)
+        file_type = original_filename.rsplit('.', 1)[1].lower()
+        
+        # Save to database
+        conn.execute('''INSERT INTO files (session_id, user_id, filename, original_filename, file_size, file_type) 
+                       VALUES (?, ?, ?, ?, ?, ?)''',
+                    (session_id, session['user_id'], filename, original_filename, file_size, file_type))
+        conn.commit()
+        conn.close()
+        
+        flash(f'File "{original_filename}" uploaded successfully!')
+    else:
+        flash('Invalid file type. Allowed types: images, PDFs, Office documents, text files, archives')
+        conn.close()
+    
+    return redirect(url_for('detail', session_id=session_id))
+
+@app.route('/file/<int:file_id>/download')
+@login_required
+def download_file(file_id):
+    conn = get_db()
+    file_record = conn.execute('SELECT * FROM files WHERE id = ?', (file_id,)).fetchone()
+    
+    if not file_record:
+        conn.close()
+        flash('File not found')
+        return redirect(url_for('index'))
+    
+    # Check if user has RSVP'd to the session
+    rsvp = conn.execute('SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
+                       (file_record['session_id'], session['user_id'])).fetchone()
+    conn.close()
+    
+    if not rsvp:
+        flash('You must RSVP to download files from this session')
+        return redirect(url_for('detail', session_id=file_record['session_id']))
+    
+    return send_from_directory(app.config['UPLOAD_FOLDER'], file_record['filename'], 
+                              as_attachment=True, download_name=file_record['original_filename'])
+
+@app.route('/file/<int:file_id>/delete', methods=['POST'])
+@login_required
+def delete_file(file_id):
+    conn = get_db()
+    file_record = conn.execute('SELECT * FROM files WHERE id = ?', (file_id,)).fetchone()
+    
+    if not file_record:
+        conn.close()
+        flash('File not found')
+        return redirect(url_for('index'))
+    
+    session_id = file_record['session_id']
+    
+    # Check if user is the file uploader or session creator
+    study_session = conn.execute('SELECT creator_id FROM sessions WHERE id = ?', (session_id,)).fetchone()
+    
+    if file_record['user_id'] == session['user_id'] or study_session['creator_id'] == session['user_id']:
+        # Delete file from filesystem
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file_record['filename'])
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        # Delete from database
+        conn.execute('DELETE FROM files WHERE id = ?', (file_id,))
+        conn.commit()
+        flash('File deleted successfully')
+    else:
+        flash('You can only delete your own files')
+    
+    conn.close()
+    return redirect(url_for('detail', session_id=session_id))
 
 @app.route('/invitation/<int:invitation_id>/respond', methods=['POST'])
 @login_required
