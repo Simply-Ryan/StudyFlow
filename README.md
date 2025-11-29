@@ -1,6 +1,10 @@
-# Study Session Manager 📚
+# StudySync 📚
 
 A web application that helps students and study groups organize and manage collaborative study sessions, supporting both remote and in-person meetings.
+
+> **🚀 First time here?** See [GETTING_STARTED.md](GETTING_STARTED.md) for a 2-minute setup guide!
+> 
+> **Windows:** Run `start.bat` | **Mac/Linux:** Run `./start.sh` | **Any OS:** Run `python setup.py`
 
 ## 🎯 Project Overview
 
@@ -51,37 +55,64 @@ HackDecouverteStudyApp/
     └── detail.html      # Session details & RSVP page
 ```
 
-## 🚀 Installation & Setup
+## 🚀 Quick Start Guide
 
 ### Prerequisites
 - Python 3.8 or higher
 - pip (Python package manager)
+- Git (to clone the repository)
 
-### Step 1: Clone or Navigate to Project
-```bash
-cd C:\Programming\Visual_Studio_Code\WebApps\HackDecouverteStudyApp
+### Automated Setup (Recommended)
+
+**Windows Users:**
+```cmd
+setup.bat
+python app.py
 ```
 
-### Step 2: Install Dependencies
+**Mac/Linux Users:**
+```bash
+chmod +x setup.sh
+./setup.sh
+python3 app.py
+```
+
+**Cross-Platform (Python):**
+```bash
+python setup.py
+python app.py
+```
+
+Then open: **http://127.0.0.1:5000**
+
+### Manual Installation
+
+**1. Clone the Repository**
+```bash
+git clone https://github.com/Simply-Ryan/Simply-Ryan.github.io.git
+cd Simply-Ryan.github.io/Visual_Studio_Code/WebApps/HackDecouverteStudyApp
+```
+
+**2. Install Dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-### Step 3: Initialize Database
+**3. Initialize Database**
 ```bash
 python init_db.py
 ```
 
-### Step 4: Run the Application
+**4. Run Application**
 ```bash
 python app.py
 ```
 
-### Step 5: Access the Application
-Open your browser and navigate to:
-```
-http://localhost:5000
-```
+**5. Open Browser**
+Navigate to: **http://127.0.0.1:5000**
+
+### 📖 Need Help?
+See [INSTALL.md](INSTALL.md) for detailed installation instructions and troubleshooting.
 
 ## 📊 Database Schema
 

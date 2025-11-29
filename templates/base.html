@@ -9,10 +9,17 @@
 <body>
     <nav class="navbar">
         <div class="container">
-            <a href="{{ url_for('index') }}" class="logo">StudyFlow - Learn Together</a>
+            <a href="{{ url_for('index') }}" class="logo">StudySync</a>
             <div class="nav-links">
                 <a href="{{ url_for('index') }}">Home</a>
-                <a href="{{ url_for('create') }}" class="btn-primary">Create Session</a>
+                {% if session.user_id %}
+                    <a href="{{ url_for('create') }}" class="btn-primary">Create Session</a>
+                    <span class="user-greeting">Hello, {{ session.full_name }}!</span>
+                    <a href="{{ url_for('logout') }}" class="btn-secondary">Logout</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="btn-secondary">Login</a>
+                    <a href="{{ url_for('register') }}" class="btn-primary">Register</a>
+                {% endif %}
             </div>
         </div>
     </nav>

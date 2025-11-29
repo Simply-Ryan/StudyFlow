@@ -75,13 +75,14 @@ body {
 .nav-links a {
     text-decoration: none;
     color: #ffffff;
-    padding: 1rem 1rem;
+    padding: 0.3rem 1rem;
     border-radius: 5px;
     transition: all 0.3s;
 }
 
 .nav-links a:hover {
     background: #fad6a4;
+    color: black;
 }
 
 /* ============================================
@@ -102,7 +103,7 @@ body {
 }
 
 .btn-primary {
-    background: #667eea;
+    background: #000000;
     color: white;
 }
 
@@ -126,13 +127,16 @@ body {
 .btn-large {
     padding: 1rem 2rem;
     font-size: 1.1rem;
-    background: white;
-    color: #667eea;
+    background: rgb(255, 255, 255);
+    border: 2px solid black;
+    color: black;
 }
 
 .btn-large:hover {
     transform: scale(1.05);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    background: black;
+    color: white;
 }
 
 /* ============================================
@@ -170,8 +174,9 @@ body {
 
 /* Landing page hero banner */
 .hero {
-    background: white;
+    background: rgb(255, 255, 255);
     padding: 3rem 2rem;
+    border: 2px solid black;
     border-radius: 15px;
     text-align: center;
     margin: 2rem 0;
@@ -180,7 +185,7 @@ body {
 
 .hero h1 {
     font-size: 2.5rem;
-    color: #667eea;
+    color: #000000;
     margin-bottom: 1rem;
 }
 
@@ -199,6 +204,7 @@ body {
     background: white;
     padding: 2rem;
     border-radius: 15px;
+    border: 2px solid;
     margin: 2rem 0;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
@@ -751,6 +757,178 @@ body {
     .message-textarea {
         width: 100%;
     }
+}
+
+/* ============================================
+   12. AUTHENTICATION & USER FEATURES
+   ============================================ */
+
+/* User greeting in navbar */
+.user-greeting {
+    color: #fff;
+    margin: 0 15px;
+    font-weight: 500;
+}
+
+/* Username badges */
+.username-badge {
+    color: #666;
+    font-size: 0.85em;
+    margin-left: 8px;
+    font-weight: normal;
+}
+
+/* Session creator info */
+.session-creator {
+    color: #666;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+.session-creator-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+/* Invitations section */
+.invitations-section {
+    margin: 30px 0;
+    padding: 20px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.invitations-list {
+    display: grid;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.invitation-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.invitation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.invitation-header h3 {
+    margin: 0;
+    font-size: 1.3em;
+}
+
+.badge-pending {
+    background: rgba(255, 255, 255, 0.3);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.85em;
+}
+
+.invitation-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.invitation-actions button {
+    flex: 1;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.invitation-actions .btn-primary {
+    background: #fff;
+    color: #667eea;
+}
+
+.invitation-actions .btn-primary:hover {
+    background: #f0f0f0;
+}
+
+.invitation-actions .btn-secondary {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.invitation-actions .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Invite section in session detail */
+.invite-section {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 25px;
+    color: #fff;
+}
+
+.invite-section h2 {
+    margin-bottom: 10px;
+}
+
+.invite-form {
+    margin-top: 15px;
+}
+
+.invite-form .form-group {
+    display: flex;
+    gap: 10px;
+}
+
+.select-input {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    font-size: 1em;
+    color: #333;
+}
+
+.select-input:focus {
+    outline: none;
+    border-color: #fff;
+}
+
+/* Info and success messages */
+.info-message {
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #1976d2;
+    margin: 15px 0;
+}
+
+.info-message a {
+    color: #1565c0;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.success-message {
+    background: #e8f5e9;
+    color: #2e7d32;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #4caf50;
+    margin: 15px 0;
+    font-weight: 500;
 }
 
 /* ============================================

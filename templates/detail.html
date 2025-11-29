@@ -36,6 +36,33 @@
         {% endif %}
     </div>
 
+    <div class="session-creator-info">
+        <p><strong>Created by:</strong> {{ session.creator_name }}</p>
+    </div>
+
+    {% if is_creator %}
+    <div class="invite-section">
+        <h2>📨 Invite Students</h2>
+        <p>As the creator, you can invite other students to join this session</p>
+        
+        {% if all_users %}
+            <form method="POST" action="{{ url_for('invite_user', session_id=session.id) }}" class="invite-form">
+                <div class="form-group">
+                    <select name="invitee_id" required class="select-input">
+                        <option value="">Select a student to invite...</option>
+                        {% for user in all_users %}
+                            <option value="{{ user.id }}">{{ user.full_name }} (@{{ user.username }})</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn-primary">Send Invitation</button>
+                </div>
+            </form>
+        {% else %}
+            <p class="info-message">All available students have been invited or already joined!</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="rsvp-section">
         <h2>RSVP to this Session</h2>
         
@@ -55,15 +82,19 @@
             </div>
         </div>
         
-        {% if not is_full %}
-            <form method="POST" class="rsvp-form">
-                <div class="form-group">
-                    <input type="text" name="participant_name" placeholder="Your name" required>
-                    <button type="submit" class="btn-primary">RSVP</button>
-                </div>
-            </form>
+        {% if session.user_id %}
+            {% if user_has_rsvp %}
+                <p class="success-message">✅ You have RSVP'd to this session!</p>
+            {% elif not is_full %}
+                <form method="POST" class="rsvp-form">
+                    <input type="hidden" name="rsvp" value="1">
+                    <button type="submit" class="btn-primary btn-large">RSVP to Join</button>
+                </form>
+            {% else %}
+                <p class="full-message">This session has reached maximum capacity.</p>
+            {% endif %}
         {% else %}
-            <p class="full-message">This session has reached maximum capacity.</p>
+            <p class="info-message">Please <a href="{{ url_for('login') }}">login</a> to RSVP to this session.</p>
         {% endif %}
     </div>
 
@@ -72,7 +103,10 @@
         {% if rsvps %}
             <ul class="participant-list">
                 {% for rsvp in rsvps %}
-                    <li>👤 {{ rsvp.participant_name }}</li>
+                    <li>
+                        👤 {{ rsvp.full_name }} 
+                        <span class="username-badge">@{{ rsvp.username }}</span>
+                    </li>
                 {% endfor %}
             </ul>
         {% else %}
@@ -89,7 +123,8 @@
                 {% for message in messages %}
                     <div class="message-bubble">
                         <div class="message-header">
-                            <strong class="sender-name">{{ message.sender_name }}</strong>
+                            <strong class="sender-name">{{ message.full_name }}</strong>
+                            <span class="username-badge">@{{ message.username }}</span>
                             <span class="message-time">{{ message.created_at }}</span>
                         </div>
                         <div class="message-text">{{ message.message_text }}</div>
@@ -100,15 +135,16 @@
             {% endif %}
         </div>
 
-        <form method="POST" action="{{ url_for('post_message', session_id=session.id) }}" class="message-form">
-            <div class="form-group">
-                <input type="text" name="sender_name" placeholder="Your name" required class="message-input-name">
-            </div>
-            <div class="form-group message-input-group">
-                <textarea name="message_text" placeholder="Type your message..." required rows="3" class="message-textarea"></textarea>
-                <button type="submit" class="btn-primary">Send Message</button>
-            </div>
-        </form>
+        {% if session.user_id %}
+            <form method="POST" action="{{ url_for('post_message', session_id=session.id) }}" class="message-form">
+                <div class="form-group message-input-group">
+                    <textarea name="message_text" placeholder="Type your message..." required rows="3" class="message-textarea"></textarea>
+                    <button type="submit" class="btn-primary">Send Message</button>
+                </div>
+            </form>
+        {% else %}
+            <p class="info-message">Please <a href="{{ url_for('login') }}">login</a> to send messages.</p>
+        {% endif %}
     </div>
 
     <div class="reminder-box">

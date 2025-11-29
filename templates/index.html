@@ -4,10 +4,41 @@
 
 {% block content %}
 <div class="hero">
-    <h1>Welcome to Study Session Manager</h1>
+    <h1>Welcome to StudySync</h1>
     <p>Organize and join study sessions with your peers</p>
-    <a href="{{ url_for('create') }}" class="btn-large">Create New Session</a>
+    {% if session.user_id %}
+        <a href="{{ url_for('create') }}" class="btn-large">Create New Session</a>
+    {% else %}
+        <a href="{{ url_for('register') }}" class="btn-large">Get Started - Register Now</a>
+    {% endif %}
 </div>
+
+{% if invitations %}
+<section class="invitations-section">
+    <h2>📩 Your Invitations</h2>
+    <div class="invitations-list">
+        {% for invitation in invitations %}
+        <div class="invitation-card">
+            <div class="invitation-header">
+                <h3>{{ invitation.session_title }}</h3>
+                <span class="badge badge-pending">Pending</span>
+            </div>
+            <p>{{ invitation.inviter_name }} invited you to join this study session</p>
+            <div class="invitation-actions">
+                <form method="POST" action="{{ url_for('respond_invitation', invitation_id=invitation.id) }}" style="display: inline;">
+                    <input type="hidden" name="response" value="accept">
+                    <button type="submit" class="btn-primary">Accept</button>
+                </form>
+                <form method="POST" action="{{ url_for('respond_invitation', invitation_id=invitation.id) }}" style="display: inline;">
+                    <input type="hidden" name="response" value="decline">
+                    <button type="submit" class="btn-secondary">Decline</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
 
 <section class="sessions-list">
     <h2>Available Study Sessions</h2>
@@ -18,6 +49,7 @@
             <div class="session-card subject-{{ session.subject|replace(' ', '-')|lower }}">
                 <div class="subject-badge">{{ session.subject }}</div>
                 <h3>{{ session.title }}</h3>
+                <p class="session-creator">Created by {{ session.creator_name }}</p>
                 
                 {% if session.session_date %}
                     <div class="session-time">
