@@ -675,6 +675,326 @@ def check_and_send_reminders():
     
     conn.close()
 
+# NOTES ROUTES
+
+@app.route('/notes')
+def notes():
+    conn = get_db()
+    
+    # get search and filter params
+    search_query = request.args.get('search', '').strip()
+    subject_filter = request.args.get('subject', '').strip()
+    view_filter = request.args.get('view', 'all').strip()  # all, my_notes, public
+    
+    # build query based on filters
+    query = '''
+        SELECT n.*, u.full_name as author_name, u.username as author_username,
+               (SELECT COUNT(*) FROM note_comments WHERE note_id = n.id) as comment_count
+        FROM notes n
+        JOIN users u ON n.user_id = u.id
+        WHERE 1=1
+    '''
+    params = []
+    
+    # view filter
+    if 'user_id' in session:
+        if view_filter == 'my_notes':
+            query += ' AND n.user_id = ?'
+            params.append(session['user_id'])
+        elif view_filter == 'public':
+            query += ' AND n.is_public = 1'
+        else:  # all
+            query += ' AND (n.is_public = 1 OR n.user_id = ?)'
+            params.append(session['user_id'])
+    else:
+        query += ' AND n.is_public = 1'
+    
+    if search_query:
+        query += ' AND (n.title LIKE ? OR n.description LIKE ? OR n.content LIKE ?)'
+        params.extend([f'%{search_query}%', f'%{search_query}%', f'%{search_query}%'])
+    
+    if subject_filter:
+        query += ' AND n.subject = ?'
+        params.append(subject_filter)
+    
+    query += ' ORDER BY n.created_at DESC'
+    
+    notes_list = conn.execute(query, params).fetchall()
+    conn.close()
+    
+    return render_template('notes.html', notes=notes_list, view_filter=view_filter)
+
+@app.route('/notes/create', methods=['GET', 'POST'])
+@login_required
+def create_note():
+    if request.method == 'POST':
+        title = request.form['title']
+        description = request.form.get('description', '')
+        content = request.form['content']
+        subject = request.form.get('subject', 'General')
+        is_public = 1 if request.form.get('is_public') == 'on' else 0
+        
+        conn = get_db()
+        cursor = conn.execute('''
+            INSERT INTO notes (user_id, title, description, content, subject, is_public)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (session['user_id'], title, description, content, subject, is_public))
+        note_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        flash('Note created successfully!')
+        return redirect(url_for('view_note', note_id=note_id))
+    
+    return render_template('create_note.html')
+
+@app.route('/notes/<int:note_id>')
+def view_note(note_id):
+    conn = get_db()
+    
+    # get note details
+    note = conn.execute('''
+        SELECT n.*, u.full_name as author_name, u.username as author_username, u.id as author_id
+        FROM notes n
+        JOIN users u ON n.user_id = u.id
+        WHERE n.id = ?
+    ''', (note_id,)).fetchone()
+    
+    if not note:
+        conn.close()
+        flash('Note not found!')
+        return redirect(url_for('notes'))
+    
+    # check if user can view this note
+    if not note['is_public'] and ('user_id' not in session or note['user_id'] != session['user_id']):
+        conn.close()
+        flash('This note is private!')
+        return redirect(url_for('notes'))
+    
+    # get comments
+    comments = conn.execute('''
+        SELECT c.*, u.full_name, u.username
+        FROM note_comments c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.note_id = ?
+        ORDER BY c.created_at ASC
+    ''', (note_id,)).fetchall()
+    
+    # get attached files
+    files = conn.execute('''
+        SELECT nf.*, u.full_name, u.username
+        FROM note_files nf
+        JOIN users u ON nf.user_id = u.id
+        WHERE nf.note_id = ?
+        ORDER BY nf.uploaded_at DESC
+    ''', (note_id,)).fetchall()
+    
+    conn.close()
+    
+    is_author = 'user_id' in session and note['user_id'] == session['user_id']
+    
+    return render_template('view_note.html', note=note, comments=comments, files=files, is_author=is_author)
+
+@app.route('/notes/<int:note_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_note(note_id):
+    conn = get_db()
+    note = conn.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
+    
+    if not note:
+        conn.close()
+        flash('Note not found!')
+        return redirect(url_for('notes'))
+    
+    if note['user_id'] != session['user_id']:
+        conn.close()
+        flash('You can only edit your own notes!')
+        return redirect(url_for('view_note', note_id=note_id))
+    
+    if request.method == 'POST':
+        title = request.form['title']
+        description = request.form.get('description', '')
+        content = request.form['content']
+        subject = request.form.get('subject', 'General')
+        is_public = 1 if request.form.get('is_public') == 'on' else 0
+        
+        conn.execute('''
+            UPDATE notes 
+            SET title = ?, description = ?, content = ?, subject = ?, is_public = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (title, description, content, subject, is_public, note_id))
+        conn.commit()
+        conn.close()
+        
+        flash('Note updated successfully!')
+        return redirect(url_for('view_note', note_id=note_id))
+    
+    conn.close()
+    return render_template('edit_note.html', note=note)
+
+@app.route('/notes/<int:note_id>/delete', methods=['POST'])
+@login_required
+def delete_note(note_id):
+    conn = get_db()
+    note = conn.execute('SELECT user_id FROM notes WHERE id = ?', (note_id,)).fetchone()
+    
+    if note and note['user_id'] == session['user_id']:
+        # delete attached files from disk
+        files = conn.execute('SELECT filename FROM note_files WHERE note_id = ?', (note_id,)).fetchall()
+        for file_record in files:
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file_record['filename'])
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        
+        # delete related records
+        conn.execute('DELETE FROM note_files WHERE note_id = ?', (note_id,))
+        conn.execute('DELETE FROM note_comments WHERE note_id = ?', (note_id,))
+        conn.execute('DELETE FROM notes WHERE id = ?', (note_id,))
+        conn.commit()
+        flash('Note deleted successfully!')
+    else:
+        flash('You can only delete your own notes!')
+    
+    conn.close()
+    return redirect(url_for('notes'))
+
+@app.route('/notes/<int:note_id>/comment', methods=['POST'])
+@login_required
+def add_note_comment(note_id):
+    comment_text = request.form.get('comment_text', '').strip()
+    
+    if comment_text:
+        conn = get_db()
+        note = conn.execute('SELECT id, is_public FROM notes WHERE id = ?', (note_id,)).fetchone()
+        
+        if note:
+            conn.execute('INSERT INTO note_comments (note_id, user_id, comment_text) VALUES (?, ?, ?)',
+                       (note_id, session['user_id'], comment_text))
+            conn.commit()
+            flash('Comment added!')
+        
+        conn.close()
+    
+    return redirect(url_for('view_note', note_id=note_id))
+
+@app.route('/notes/<int:note_id>/upload', methods=['POST'])
+@login_required
+def upload_note_file(note_id):
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
+    
+    if 'file' not in request.files:
+        if is_ajax:
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        flash('No file selected')
+        return redirect(url_for('view_note', note_id=note_id))
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        if is_ajax:
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        flash('No file selected')
+        return redirect(url_for('view_note', note_id=note_id))
+    
+    conn = get_db()
+    note = conn.execute('SELECT user_id FROM notes WHERE id = ?', (note_id,)).fetchone()
+    
+    if not note or note['user_id'] != session['user_id']:
+        error_msg = 'You can only upload files to your own notes'
+        conn.close()
+        if is_ajax:
+            return jsonify({'success': False, 'error': error_msg}), 403
+        flash(error_msg)
+        return redirect(url_for('view_note', note_id=note_id))
+    
+    if file and allowed_file(file.filename):
+        original_filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"note_{timestamp}_{original_filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        file.save(file_path)
+        
+        file_size = os.path.getsize(file_path)
+        file_type = original_filename.rsplit('.', 1)[1].lower()
+        
+        conn.execute('''
+            INSERT INTO note_files (note_id, user_id, filename, original_filename, file_size, file_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (note_id, session['user_id'], filename, original_filename, file_size, file_type))
+        conn.commit()
+        conn.close()
+        
+        if is_ajax:
+            return jsonify({'success': True, 'message': f'File "{original_filename}" uploaded successfully!'}), 200
+        flash(f'File "{original_filename}" uploaded successfully!')
+    else:
+        error_msg = 'Invalid file type'
+        conn.close()
+        if is_ajax:
+            return jsonify({'success': False, 'error': error_msg}), 400
+        flash(error_msg)
+    
+    return redirect(url_for('view_note', note_id=note_id))
+
+@app.route('/notes/file/<int:file_id>/download')
+@login_required
+def download_note_file(file_id):
+    conn = get_db()
+    file_record = conn.execute('''
+        SELECT nf.*, n.is_public, n.user_id as note_owner
+        FROM note_files nf
+        JOIN notes n ON nf.note_id = n.id
+        WHERE nf.id = ?
+    ''', (file_id,)).fetchone()
+    
+    if not file_record:
+        conn.close()
+        flash('File not found')
+        return redirect(url_for('notes'))
+    
+    # can download if note is public or user is the owner
+    if not file_record['is_public'] and file_record['note_owner'] != session['user_id']:
+        conn.close()
+        flash('You cannot download files from private notes')
+        return redirect(url_for('notes'))
+    
+    conn.close()
+    return send_from_directory(app.config['UPLOAD_FOLDER'], file_record['filename'],
+                              as_attachment=True, download_name=file_record['original_filename'])
+
+@app.route('/notes/file/<int:file_id>/delete', methods=['POST'])
+@login_required
+def delete_note_file(file_id):
+    conn = get_db()
+    file_record = conn.execute('''
+        SELECT nf.*, n.user_id as note_owner
+        FROM note_files nf
+        JOIN notes n ON nf.note_id = n.id
+        WHERE nf.id = ?
+    ''', (file_id,)).fetchone()
+    
+    if not file_record:
+        conn.close()
+        flash('File not found')
+        return redirect(url_for('notes'))
+    
+    note_id = file_record['note_id']
+    
+    if file_record['note_owner'] == session['user_id']:
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file_record['filename'])
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        conn.execute('DELETE FROM note_files WHERE id = ?', (file_id,))
+        conn.commit()
+        flash('File deleted successfully')
+    else:
+        flash('You can only delete files from your own notes')
+    
+    conn.close()
+    return redirect(url_for('view_note', note_id=note_id))
+
 # set up background scheduler to run every 30 minutes
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_and_send_reminders, trigger="interval", minutes=30)

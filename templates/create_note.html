@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Create Note - Study Sessions{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h1><i class="fas fa-plus-circle"></i> Create New Note</h1>
+    
+    <form method="POST" class="session-form">
+        <div class="form-group">
+            <label for="title">Note Title *</label>
+            <input type="text" id="title" name="title" required placeholder="e.g., Calculus Chapter 3 Summary">
+        </div>
+
+        <div class="form-group">
+            <label for="subject">Subject</label>
+            <select id="subject" name="subject">
+                <option value="General">General</option>
+                <option value="Mathematics">Mathematics</option>
+                <option value="Science">Science</option>
+                <option value="Computer Science">Computer Science</option>
+                <option value="Literature">Literature</option>
+                <option value="History">History</option>
+                <option value="Languages">Languages</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Short Description</label>
+            <input type="text" id="description" name="description" placeholder="Brief summary of what this note covers">
+        </div>
+
+        <div class="form-group">
+            <label for="content">Note Content *</label>
+            <textarea id="content" name="content" rows="15" required placeholder="Write your notes here..."></textarea>
+        </div>
+
+        <div class="form-group checkbox-group">
+            <label>
+                <input type="checkbox" name="is_public" id="is_public">
+                <span>Make this note public (visible to all users)</span>
+            </label>
+            <p class="help-text">If unchecked, only you will be able to see this note</p>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">Create Note</button>
+            <a href="{{ url_for('notes') }}" class="btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.form-container {
+    max-width: 800px;
+    margin: 40px auto;
+    background: white;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.form-container h1 {
+    margin-bottom: 30px;
+    color: #333;
+}
+
+.session-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #333;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 1em;
+    font-family: inherit;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 200px;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+.checkbox-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-weight: normal;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+
+.help-text {
+    color: #666;
+    font-size: 0.85em;
+    margin: 5px 0 0 0;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.form-actions button,
+.form-actions a {
+    padding: 12px 30px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+}
+</style>
+
+{% endblock %}
