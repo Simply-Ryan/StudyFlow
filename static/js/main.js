@@ -70,4 +70,50 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => alert.remove(), 300);
         }, 5000);
     });
+    
+    // Handle quick file upload from chat area
+    const quickFileUpload = document.getElementById('quick-file-upload');
+    if (quickFileUpload) {
+        quickFileUpload.addEventListener('change', function(e) {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                const sessionId = window.location.pathname.split('/').pop();
+                
+                // Create FormData for file upload
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Show upload indication
+                const uploadBtn = document.querySelector('.file-upload-btn');
+                const originalContent = uploadBtn.innerHTML;
+                uploadBtn.innerHTML = '⏳';
+                uploadBtn.style.pointerEvents = 'none';
+                
+                // Upload the file
+                fetch(`/session/${sessionId}/upload`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Reload page to show new file
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to upload file');
+                        uploadBtn.innerHTML = originalContent;
+                        uploadBtn.style.pointerEvents = 'auto';
+                    }
+                })
+                .catch(error => {
+                    alert('Error uploading file: ' + error);
+                    uploadBtn.innerHTML = originalContent;
+                    uploadBtn.style.pointerEvents = 'auto';
+                });
+                
+                // Reset file input
+                this.value = '';
+            }
+        });
+    }
 });

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify
 import sqlite3
 import os
 from datetime import datetime
@@ -11,7 +11,7 @@ app.secret_key = 'your_secret_key'
 
 DATABASE = 'sessions.db'
 UPLOAD_FOLDER = 'uploads'
-MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip', 'rar'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -426,8 +426,13 @@ def dismiss_reminder(reminder_id):
 @app.route('/session/<int:session_id>/upload', methods=['POST'])
 @login_required
 def upload_file(session_id):
+    # Check if it's an AJAX request (only from JavaScript fetch, not regular form)
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
+    
     # Check if file is in request
     if 'file' not in request.files:
+        if is_ajax:
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
         flash('No file selected')
         return redirect(url_for('detail', session_id=session_id))
     
@@ -435,6 +440,8 @@ def upload_file(session_id):
     
     # Check if file is empty
     if file.filename == '':
+        if is_ajax:
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
         flash('No file selected')
         return redirect(url_for('detail', session_id=session_id))
     
@@ -444,8 +451,11 @@ def upload_file(session_id):
                        (session_id, session['user_id'])).fetchone()
     
     if not rsvp:
-        flash('You must RSVP to upload files to this session')
+        error_msg = 'You must RSVP to upload files to this session'
         conn.close()
+        if is_ajax:
+            return jsonify({'success': False, 'error': error_msg}), 403
+        flash(error_msg)
         return redirect(url_for('detail', session_id=session_id))
     
     # Validate file
@@ -470,10 +480,15 @@ def upload_file(session_id):
         conn.commit()
         conn.close()
         
+        if is_ajax:
+            return jsonify({'success': True, 'message': f'File "{original_filename}" uploaded successfully!'}), 200
         flash(f'File "{original_filename}" uploaded successfully!')
     else:
-        flash('Invalid file type. Allowed types: images, PDFs, Office documents, text files, archives')
+        error_msg = 'Invalid file type. Allowed types: images, PDFs, Office documents, text files, archives'
         conn.close()
+        if is_ajax:
+            return jsonify({'success': False, 'error': error_msg}), 400
+        flash(error_msg)
     
     return redirect(url_for('detail', session_id=session_id))
 

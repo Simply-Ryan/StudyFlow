@@ -149,7 +149,15 @@
             <form method="POST" action="{{ url_for('post_message', session_id=study_session.id) }}" class="message-form">
                 <div class="form-group message-input-group">
                     <textarea name="message_text" placeholder="Type your message..." required rows="3" class="message-textarea"></textarea>
-                    <button type="submit" class="btn-primary">Send Message</button>
+                    <div class="message-actions">
+                        {% if user_has_rsvp %}
+                            <label for="quick-file-upload" class="file-upload-btn" title="Upload a file">
+                                📁
+                                <input type="file" id="quick-file-upload" style="display: none;">
+                            </label>
+                        {% endif %}
+                        <button type="submit" class="btn-primary">Send Message</button>
+                    </div>
                 </div>
             </form>
         {% else %}
@@ -212,7 +220,7 @@
                     <div class="form-group">
                         <label for="file">Upload Study Material</label>
                         <input type="file" name="file" id="file" required class="file-input">
-                        <small class="help-text">Accepted: Images (PNG, JPG, JPEG, GIF), Documents (PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT), Archives (ZIP, RAR). Max size: 16MB</small>
+                        <small class="help-text">Accepted: Images (PNG, JPG, JPEG, GIF), Documents (PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT), Archives (ZIP, RAR). Max size: 100MB</small>
                     </div>
                     <button type="submit" class="btn-primary">Upload File</button>
                 </form>
