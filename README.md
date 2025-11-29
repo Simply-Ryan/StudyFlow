@@ -8,7 +8,7 @@ This project was created for Hack Découverte. Contributions and suggestions are
 
 # Credits
 
-## The Goon Squad
+### Team Name: The Goon Squad
 
 ### Front-end
 Félix Hardy
