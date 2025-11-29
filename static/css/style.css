@@ -224,17 +224,17 @@ body {
 /* Session list container */
 .sessions-list {
     background: white;
-    padding: 1rem 2rem;
-    border-radius: 8px;
+    padding: 2rem;
+    border-radius: 15px;
     border: 2px solid;
-    margin: 1.2rem 0;
+    margin: 2rem 0;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
 .sessions-list h2 {
     color: #000000;
     margin-bottom: 1.5rem;
-    font-size: 1.8rem;
+    font-size: 0.5rem;
 }
 
 .session-grid {
@@ -254,17 +254,17 @@ body {
 }
 
 /* Subject-based color coding - Each subject has unique gradient */
-.session-card.subject-mathematics { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: 1.5px solid #000000; }
-.session-card.subject-physics { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);border: 1.5px solid #000000;  }
-.session-card.subject-chemistry { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);border: 1.5px solid #000000;  }
-.session-card.subject-biology { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);border: 1.5px solid #000000;  }
-.session-card.subject-computer-science { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);border: 1.5px solid #000000;  }
-.session-card.subject-engineering { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);border: 1.5px solid #000000;  }
-.session-card.subject-business { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); border: 1.5px solid #000000; }
-.session-card.subject-languages { background: linear-gradient(135deg, #ff9a56 0%, #ff6a88 100%);border: 1.5px solid #000000;  }
-.session-card.subject-history { background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);border: 1.5px solid #000000;  }
-.session-card.subject-literature { background: linear-gradient(135deg, #ff6e7f 0%, #bfe9ff 100%);border: 1.5px solid #000000;  }
-.session-card.subject-general { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);border: 1.5px solid #000000;  }
+.session-card.subject-mathematics { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: 2px solid #000000; }
+.session-card.subject-physics { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);border: 2px solid #000000;  }
+.session-card.subject-chemistry { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);border: 2px solid #000000;  }
+.session-card.subject-biology { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);border: 2px solid #000000;  }
+.session-card.subject-computer-science { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);border: 2px solid #000000;  }
+.session-card.subject-engineering { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);border:2px solid #000000;  }
+.session-card.subject-business { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); border: 2px solid #000000; }
+.session-card.subject-languages { background: linear-gradient(135deg, #ff9a56 0%, #ff6a88 100%);border: 2px solid #000000;  }
+.session-card.subject-history { background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);border: 2px solid #000000;  }
+.session-card.subject-literature { background: linear-gradient(135deg, #ff6e7f 0%, #bfe9ff 100%);border: 2px solid #000000;  }
+.session-card.subject-general { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);border: 2px solid #000000;  }
 
 /* Subject badge on cards */
 .subject-badge {
