@@ -42,7 +42,7 @@
 
 {% if reminders %}
 <section class="reminders-section">
-    <h2>🔔 Recent Reminders</h2>
+    <h2><i class="fas fa-bell"></i> Recent Reminders</h2>
     <div class="reminders-list">
         {% for reminder in reminders %}
         <div class="reminder-card">
@@ -67,6 +67,28 @@
 <section class="sessions-list">
     <h2>Available Study Sessions</h2>
     
+    <div class="filter-search-container">
+        <div class="filter-form">
+            <div class="filter-group">
+                <input type="text" placeholder="Search by title..." class="search-input">
+                <select class="subject-filter">
+                    <option value="">All Subjects</option>
+                    <option value="Mathematics">Mathematics</option>
+                    <option value="Physics">Physics</option>
+                    <option value="Chemistry">Chemistry</option>
+                    <option value="Biology">Biology</option>
+                    <option value="Computer Science">Computer Science</option>
+                    <option value="Engineering">Engineering</option>
+                    <option value="Business">Business</option>
+                    <option value="Languages">Languages</option>
+                    <option value="History">History</option>
+                    <option value="Literature">Literature</option>
+                    <option value="General">General</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
     {% if sessions %}
         <div class="session-grid">
             {% for session in sessions %}
@@ -77,7 +99,7 @@
                 
                 {% if session.session_date %}
                     <div class="session-time">
-                        <span class="time-badge">⏰ {{ format_time_remaining(session.session_date) }}</span>
+                        <span class="time-badge"><i class="fas fa-clock"></i> {{ format_time_remaining(session.session_date) }}</span>
                     </div>
                 {% endif %}
                 

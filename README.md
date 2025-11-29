@@ -552,6 +552,56 @@ If you're having login problems:
 
 This project was created for Hack Découverte. Contributions and suggestions are welcome!
 
+## Credits & Acknowledgments
+
+### Third-Party Libraries & Frameworks
+
+#### Backend
+- **[Flask](https://flask.palletsprojects.com/)** (v3.0.0) - Web framework
+  - License: BSD-3-Clause
+  - Copyright: Pallets Projects
+  
+- **[Werkzeug](https://werkzeug.palletsprojects.com/)** (v3.0.1) - WSGI utilities and security functions
+  - License: BSD-3-Clause
+  - Copyright: Pallets Projects
+  - Used for: Password hashing (`generate_password_hash`, `check_password_hash`), secure filename handling
+
+- **[Jinja2](https://jinja.palletsprojects.com/)** - Template engine (included with Flask)
+  - License: BSD-3-Clause
+  - Copyright: Pallets Projects
+
+#### Frontend
+- **[Font Awesome](https://fontawesome.com/)** (v6.5.1) - Icon library
+  - License: Font Awesome Free License (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT)
+  - CDN: `https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css`
+  - Used for: UI icons throughout the application
+
+#### Database
+- **SQLite3** - Embedded database (included with Python)
+  - License: Public Domain
+  - No external dependencies required
+
+#### Python Standard Library
+The following built-in Python modules are used (no attribution required but acknowledged):
+- `sqlite3` - Database connectivity
+- `os` - File and directory operations
+- `datetime` - Date and time handling
+- `functools` - Higher-order functions and decorators
+
+### Design & Inspiration
+- Color scheme inspired by modern gradient design trends
+- UI/UX patterns following Material Design principles
+- Responsive design techniques from modern web development best practices
+
+### Development Tools
+- **Python** (3.x) - Programming language
+- **Git** - Version control
+- **Visual Studio Code** - Code editor
+
+### Special Thanks
+- **Hack Découverte** - For providing the opportunity and platform for this project
+- **Open Source Community** - For maintaining the libraries and tools that made this project possible
+
 ## License
 
 This project is open source and available for educational purposes.

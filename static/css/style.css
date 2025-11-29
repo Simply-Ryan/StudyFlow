@@ -267,6 +267,17 @@ body {
 .session-card.subject-literature { background: linear-gradient(135deg, #ff6e7f 0%, #bfe9ff 100%);border: 2px solid #000000;  }
 .session-card.subject-general { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);border: 2px solid #000000;  }
 
+/* Empty filter state */
+.filter-empty {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+    background: #f5f5f5;
+    border-radius: 8px;
+    margin-top: 1rem;
+    font-size: 1.1rem;
+}
+
 /* Subject badge on cards */
 .subject-badge {
     display: inline-block;
@@ -430,7 +441,7 @@ body {
 
 /* Session date and time display */
 .session-datetime {
-    background: linear-gradient(135deg,white, #ffe6c3);
+    background: linear-gradient(-115deg,white, #fff5e6);
     padding: 1.5rem;
     border-radius: 10px;
     margin-bottom: 2rem;
@@ -438,7 +449,7 @@ body {
 }
 
 .session-datetime h3 {
-    color: #ff0000;
+    color: #000000;
     margin-bottom: 0.75rem;
     font-size: 1.1rem;
 }
@@ -459,7 +470,7 @@ body {
 
 /* Information display box */
 .info-box {
-    background:linear-gradient(white, rgb(211, 211, 211));
+    background:linear-gradient(-115deg,white, #fff5e6);
     border: 1.5px solid black;
     padding: 1rem;
     border-radius: 8px;
@@ -467,7 +478,7 @@ body {
 }
 
 .info-box strong {
-    color: #667eea;
+    color: #000000;
     display: block;
     margin-bottom: 0.5rem;
 }
@@ -487,7 +498,7 @@ body {
 }
 
 .rsvp-section h2 {
-    color: #667eea;
+    color: #000000;
     margin-bottom: 1rem;
 }
 
@@ -577,7 +588,7 @@ body {
 }
 
 .participants-section h2 {
-    color: #667eea;
+    color: #000000;
     margin-bottom: 1rem;
 }
 
@@ -592,7 +603,7 @@ body {
     background: #f8f9fa;
     padding: 0.75rem;
     border-radius: 8px;
-    border-left: 4px solid #667eea;
+    border: 1.5px solid black;
 }
 
 /* ============================================
@@ -609,7 +620,7 @@ body {
 }
 
 .study-room-chat h2 {
-    color: #667eea;
+    color: #000000;
     margin-bottom: 0.5rem;
 }
 
@@ -662,7 +673,7 @@ body {
 }
 
 .sender-name {
-    color: #667eea;
+    color: #000000;
     font-size: 0.95rem;
 }
 
@@ -814,6 +825,21 @@ body {
     .message-textarea {
         width: 100%;
     }
+    
+    .filter-group {
+        flex-direction: column;
+    }
+    
+    .search-input,
+    .subject-filter {
+        width: 100%;
+        min-width: 100%;
+    }
+    
+    .filter-group .btn-primary,
+    .filter-group .btn-secondary {
+        width: 100%;
+    }
 }
 
 /* ============================================
@@ -928,10 +954,11 @@ body {
 /* Creator actions section */
 .creator-actions {
     margin-bottom: 20px;
-    padding: 15px;
+    padding: 0px;
+    padding-top: 25px;
     background: rgba(255, 255, 255, 0.8);
     border-radius: 12px;
-    border-left: 4px solid #dc3545;
+    padding-right: 50px;
 }
 
 .delete-form {
@@ -1013,7 +1040,7 @@ body {
     flex: 1;
     min-width: 300px;
     padding: 12px;
-    border: 2px solid #ffc107;
+    border: 2px solid #bf9c32;
     border-radius: 8px;
     font-size: 1rem;
 }
@@ -1066,11 +1093,10 @@ body {
 }
 
 .reminder-card {
-    background: linear-gradient(135deg, #fff9e6 0%, #ffe8a1 100%);
+    background-color: rgb(255, 225, 169);
     padding: 20px;
     border-radius: 12px;
-    border-left: 5px solid #ffc107;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 15px 15px rgba(0, 0, 0, 0.1);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 

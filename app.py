@@ -83,12 +83,31 @@ def get_db():
 @app.route('/')
 def index():
     conn = get_db()
-    sessions_query = conn.execute('''
+    
+    # Get filter parameters
+    search_query = request.args.get('search', '').strip()
+    subject_filter = request.args.get('subject', '').strip()
+    
+    # Build dynamic query with filters
+    query = '''
         SELECT s.*, u.full_name as creator_name 
         FROM sessions s
         LEFT JOIN users u ON s.creator_id = u.id
-        ORDER BY s.created_at DESC
-    ''').fetchall()
+        WHERE 1=1
+    '''
+    params = []
+    
+    if search_query:
+        query += ' AND s.title LIKE ?'
+        params.append(f'%{search_query}%')
+    
+    if subject_filter:
+        query += ' AND s.subject = ?'
+        params.append(subject_filter)
+    
+    query += ' ORDER BY s.created_at DESC'
+    
+    sessions_query = conn.execute(query, params).fetchall()
     
     # Get user's invitations if logged in
     invitations = []

@@ -25,18 +25,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const sessionTypeSelect = document.getElementById('session_type');
     const meetingLinkGroup = document.getElementById('meetingLinkGroup');
     const locationGroup = document.getElementById('locationGroup');
+    const meetingLinkInput = document.getElementById('meeting_link');
+    const locationInput = document.getElementById('location');
     
     if (sessionTypeSelect) {
         sessionTypeSelect.addEventListener('change', function() {
             if (this.value === 'remote') {
                 meetingLinkGroup.style.display = 'block';
                 locationGroup.style.display = 'none';
+                if (meetingLinkInput) meetingLinkInput.required = true;
+                if (locationInput) locationInput.required = false;
             } else if (this.value === 'in-person') {
                 meetingLinkGroup.style.display = 'none';
                 locationGroup.style.display = 'block';
+                if (meetingLinkInput) meetingLinkInput.required = false;
+                if (locationInput) locationInput.required = true;
             } else {
                 meetingLinkGroup.style.display = 'none';
                 locationGroup.style.display = 'none';
+                if (meetingLinkInput) meetingLinkInput.required = false;
+                if (locationInput) locationInput.required = false;
             }
         });
     }
@@ -115,5 +123,59 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.value = '';
             }
         });
+    }
+    
+    // Dynamic filtering for study sessions
+    const searchInput = document.querySelector('.search-input');
+    const subjectFilter = document.querySelector('.subject-filter');
+    const sessionCards = document.querySelectorAll('.session-card');
+    
+    function filterSessions() {
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const selectedSubject = subjectFilter ? subjectFilter.value : '';
+        
+        let visibleCount = 0;
+        
+        sessionCards.forEach(card => {
+            const title = card.querySelector('h3').textContent.toLowerCase();
+            const subject = card.querySelector('.subject-badge').textContent;
+            
+            const matchesSearch = !searchTerm || title.includes(searchTerm);
+            const matchesSubject = !selectedSubject || subject === selectedSubject;
+            
+            if (matchesSearch && matchesSubject) {
+                card.style.display = 'block';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        
+        // Show/hide empty state message
+        const sessionGrid = document.querySelector('.session-grid');
+        const emptyState = document.querySelector('.empty-state');
+        
+        if (sessionGrid && visibleCount === 0 && sessionCards.length > 0) {
+            if (!emptyState) {
+                const noResults = document.createElement('p');
+                noResults.className = 'empty-state filter-empty';
+                noResults.textContent = 'No sessions match your filters. Try adjusting your search criteria.';
+                sessionGrid.insertAdjacentElement('afterend', noResults);
+            }
+            sessionGrid.style.display = 'none';
+        } else if (sessionGrid) {
+            sessionGrid.style.display = 'grid';
+            const filterEmpty = document.querySelector('.filter-empty');
+            if (filterEmpty) filterEmpty.remove();
+        }
+    }
+    
+    // Add event listeners for real-time filtering
+    if (searchInput) {
+        searchInput.addEventListener('input', filterSessions);
+    }
+    
+    if (subjectFilter) {
+        subjectFilter.addEventListener('change', filterSessions);
     }
 });
