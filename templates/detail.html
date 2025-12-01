@@ -125,7 +125,7 @@
         <div class="messages-container">
             {% if messages %}
                 {% for message in messages %}
-                    <div class="message-bubble">
+                    <div class="message-item{% if session.user_id == message.user_id %} own-message{% endif %}" data-message-id="{{ message.id }}">
                         <div class="message-header">
                             <strong class="sender-name">{{ message.full_name }}</strong>
                             <span class="username-badge">@{{ message.username }}</span>
@@ -140,16 +140,16 @@
         </div>
 
         {% if 'user_id' in session %}
-            <form method="POST" action="{{ url_for('post_message', session_id=study_session.id) }}" class="message-form">
+            <form method="POST" action="{{ url_for('post_message', session_id=study_session.id) }}" class="message-form" id="messageForm">
                 <div class="form-group message-input-group">
-                    <textarea name="message_text" placeholder="Type your message..." required rows="3" class="message-textarea"></textarea>
+                    <textarea name="message_text" placeholder="Type your message..." required rows="3" class="message-textarea" id="messageTextarea"></textarea>
                     <div class="message-actions">
                         {% if user_has_rsvp %}
                             <label for="quick-file-upload" class="file-upload-btn" title="Upload a file">
                                 <i class="fas fa-folder-open"></i><input type="file" id="quick-file-upload" style="display: none;">
                             </label>
                         {% endif %}
-                        <button type="submit" class="btn-primary">Send Message</button>
+                        <button type="submit" class="btn-primary" id="sendMessageBtn">Send Message</button>
                     </div>
                 </div>
             </form>
@@ -158,13 +158,171 @@
         {% endif %}
     </div>
 
+    <script>
+    // real-time chat updates
+    (function() {
+        const messagesContainer = document.querySelector('.messages-container');
+        const messageForm = document.getElementById('messageForm');
+        const messageTextarea = document.getElementById('messageTextarea');
+        const sessionId = {{ study_session.id }};
+        const currentUserId = {{ session.get('user_id', 'null') }};
+        let lastMessageId = 0;
+        let pollInterval;
+        let isSubmitting = false;
+
+        // get last message ID on page load
+        function initLastMessageId() {
+            const messages = document.querySelectorAll('.message-item');
+            if (messages.length > 0) {
+                const lastMsg = messages[messages.length - 1];
+                const msgId = lastMsg.dataset.messageId;
+                if (msgId) {
+                    lastMessageId = parseInt(msgId);
+                }
+            }
+        }
+
+        // check if message already exists
+        function messageExists(messageId) {
+            return document.querySelector(`.message-item[data-message-id="${messageId}"]`) !== null;
+        }
+
+        // create message HTML element
+        function createMessageElement(msg) {
+            const div = document.createElement('div');
+            div.className = 'message-item';
+            div.dataset.messageId = msg.id;
+            
+            const isOwnMessage = currentUserId && msg.user_id === currentUserId;
+            if (isOwnMessage) {
+                div.classList.add('own-message');
+            }
+            
+            div.innerHTML = `
+                <div class="message-header">
+                    <strong class="sender-name">${escapeHtml(msg.full_name)}</strong>
+                    <span class="username-badge">@${escapeHtml(msg.username)}</span>
+                    <span class="message-time">${escapeHtml(msg.created_at)}</span>
+                </div>
+                <div class="message-text">${escapeHtml(msg.message_text)}</div>
+            `;
+            
+            return div;
+        }
+
+        // escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // poll for new messages
+        function pollMessages() {
+            if (isSubmitting) return; // skip polling while submitting
+            
+            fetch(`{{ url_for('get_messages', session_id=study_session.id) }}?last_id=${lastMessageId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.messages && data.messages.length > 0) {
+                        // remove empty state if it exists
+                        const emptyState = messagesContainer.querySelector('.empty-state');
+                        if (emptyState) {
+                            emptyState.remove();
+                        }
+
+                        // add new messages (skip duplicates)
+                        data.messages.forEach(msg => {
+                            if (!messageExists(msg.id)) {
+                                const msgElement = createMessageElement(msg);
+                                messagesContainer.appendChild(msgElement);
+                                lastMessageId = Math.max(lastMessageId, msg.id);
+                            }
+                        });
+
+                        // scroll to bottom
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
+                })
+                .catch(error => console.error('Error polling messages:', error));
+        }
+
+        // handle message form submission with AJAX
+        if (messageForm) {
+            messageForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                if (isSubmitting) return; // prevent double submission
+                isSubmitting = true;
+                
+                const formData = new FormData(messageForm);
+                const submitBtn = messageForm.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                
+                fetch(messageForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // remove empty state if exists
+                        const emptyState = messagesContainer.querySelector('.empty-state');
+                        if (emptyState) {
+                            emptyState.remove();
+                        }
+
+                        // add the new message only if it doesn't exist
+                        if (!messageExists(data.message.id)) {
+                            const msgElement = createMessageElement(data.message);
+                            messagesContainer.appendChild(msgElement);
+                            lastMessageId = Math.max(lastMessageId, data.message.id);
+                        }
+                        
+                        // clear textarea
+                        messageTextarea.value = '';
+                        
+                        // scroll to bottom
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
+                    isSubmitting = false;
+                    submitBtn.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Error posting message:', error);
+                    isSubmitting = false;
+                    submitBtn.disabled = false;
+                    // fallback to regular form submission
+                    messageForm.submit();
+                });
+            });
+        }
+
+        // initialize and start polling
+        if (messagesContainer) {
+            initLastMessageId();
+            
+            // poll every 3 seconds for new messages
+            pollInterval = setInterval(pollMessages, 3000);
+            
+            // stop polling when user leaves page
+            window.addEventListener('beforeunload', function() {
+                clearInterval(pollInterval);
+            });
+        }
+    })();
+    </script>
+
     <div class="file-upload-section">
         <h2>Study Materials</h2>
         
         {% if files %}
-            <div class="files-list">
+            <div class="files-list" id="filesList">
                 {% for file in files %}
-                    <div class="file-item">
+                    <div class="file-item" data-file-id="{{ file.id }}">
                         <div class="file-info">
                             <div class="file-icon">
                                 {% if file.file_type in ['png', 'jpg', 'jpeg', 'gif'] %}
@@ -224,6 +382,323 @@
             <p class="info-message">Please <a href="{{ url_for('login') }}">login</a> to upload files.</p>
         {% endif %}
     </div>
+
+    <script>
+    // real-time file updates
+    (function() {
+        const filesList = document.getElementById('filesList');
+        const uploadForm = document.querySelector('.upload-form');
+        const fileInput = document.getElementById('file');
+        const sessionId = {{ study_session.id }};
+        const currentUserId = {{ session.get('user_id', 'null') }};
+        const isCreator = {{ 'true' if is_creator else 'false' }};
+        let lastFileId = 0;
+        let filePollInterval;
+        let isUploading = false;
+
+        // get last file ID on page load
+        function initLastFileId() {
+            const files = document.querySelectorAll('.file-item');
+            if (files.length > 0) {
+                const lastFile = files[files.length - 1];
+                const fileId = lastFile.dataset.fileId;
+                if (fileId) {
+                    lastFileId = parseInt(fileId);
+                }
+            }
+        }
+
+        // check if file already exists
+        function fileExists(fileId) {
+            return document.querySelector(`.file-item[data-file-id="${fileId}"]`) !== null;
+        }
+
+        // get file icon HTML based on file type
+        function getFileIcon(fileType) {
+            const iconMap = {
+                'png': 'fa-image', 'jpg': 'fa-image', 'jpeg': 'fa-image', 'gif': 'fa-image',
+                'pdf': 'fa-file-pdf',
+                'doc': 'fa-file-word', 'docx': 'fa-file-word',
+                'xls': 'fa-file-excel', 'xlsx': 'fa-file-excel',
+                'ppt': 'fa-file-powerpoint', 'pptx': 'fa-file-powerpoint',
+                'zip': 'fa-file-archive', 'rar': 'fa-file-archive'
+            };
+            return iconMap[fileType] || 'fa-file';
+        }
+
+        // format file size
+        function formatFileSize(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let size = bytes;
+            let unitIndex = 0;
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+            return size.toFixed(1) + ' ' + units[unitIndex];
+        }
+
+        // escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // create file element HTML
+        function createFileElement(file) {
+            const div = document.createElement('div');
+            div.className = 'file-item';
+            div.dataset.fileId = file.id;
+            
+            const canDelete = currentUserId && (currentUserId === file.user_id || isCreator);
+            
+            div.innerHTML = `
+                <div class="file-info">
+                    <div class="file-icon">
+                        <i class="fas ${getFileIcon(file.file_type)}"></i>
+                    </div>
+                    <div class="file-details">
+                        <div class="file-name">${escapeHtml(file.original_filename)}</div>
+                        <div class="file-meta">
+                            Uploaded by <strong>${escapeHtml(file.full_name)}</strong> 
+                            on ${escapeHtml(file.uploaded_at.substring(0, 16))} 
+                            (${formatFileSize(file.file_size)})
+                        </div>
+                    </div>
+                </div>
+                <div class="file-actions">
+                    <a href="/file/${file.id}/download" class="btn-secondary btn-small">Download</a>
+                    ${canDelete ? `
+                        <form method="POST" action="/file/${file.id}/delete" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this file?');">
+                            <button type="submit" class="btn-danger btn-small">Delete</button>
+                        </form>
+                    ` : ''}
+                </div>
+            `;
+            
+            return div;
+        }
+
+        // poll for new files
+        function pollFiles() {
+            if (isUploading) return; // skip polling while uploading
+            
+            fetch(`{{ url_for('get_files', session_id=study_session.id) }}?last_id=${lastFileId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.files && data.files.length > 0) {
+                        // remove empty state if exists
+                        const emptyState = document.querySelector('.file-upload-section .empty-state');
+                        if (emptyState) {
+                            emptyState.remove();
+                        }
+
+                        // create files list if it doesn't exist
+                        let filesListContainer = document.getElementById('filesList');
+                        if (!filesListContainer) {
+                            filesListContainer = document.createElement('div');
+                            filesListContainer.id = 'filesList';
+                            filesListContainer.className = 'files-list';
+                            const fileSection = document.querySelector('.file-upload-section h2');
+                            fileSection.insertAdjacentElement('afterend', filesListContainer);
+                        }
+
+                        // add new files (skip duplicates)
+                        data.files.forEach(file => {
+                            if (!fileExists(file.id)) {
+                                const fileElement = createFileElement(file);
+                                filesListContainer.appendChild(fileElement);
+                                lastFileId = Math.max(lastFileId, file.id);
+                            }
+                        });
+                    }
+                })
+                .catch(error => console.error('Error polling files:', error));
+        }
+
+        // handle file upload with AJAX
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                if (isUploading) return; // prevent double submission
+                
+                if (!fileInput.files || fileInput.files.length === 0) {
+                    alert('Please select a file to upload');
+                    return;
+                }
+
+                isUploading = true;
+                const formData = new FormData(uploadForm);
+                const submitBtn = uploadForm.querySelector('button[type="submit"]');
+                const originalBtnText = submitBtn.textContent;
+                
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Uploading...';
+                
+                fetch(uploadForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    isUploading = false;
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalBtnText;
+                    
+                    if (data.success) {
+                        // remove empty state if exists
+                        const emptyState = document.querySelector('.file-upload-section .empty-state');
+                        if (emptyState) {
+                            emptyState.remove();
+                        }
+
+                        // create files list if it doesn't exist
+                        let filesListContainer = document.getElementById('filesList');
+                        if (!filesListContainer) {
+                            filesListContainer = document.createElement('div');
+                            filesListContainer.id = 'filesList';
+                            filesListContainer.className = 'files-list';
+                            const fileSection = document.querySelector('.file-upload-section h2');
+                            fileSection.insertAdjacentElement('afterend', filesListContainer);
+                        }
+
+                        // add the new file only if it doesn't exist
+                        if (!fileExists(data.file.id)) {
+                            const fileElement = createFileElement(data.file);
+                            filesListContainer.appendChild(fileElement);
+                            lastFileId = Math.max(lastFileId, data.file.id);
+                        }
+                        
+                        // clear file input
+                        fileInput.value = '';
+                        
+                        // show success message
+                        alert(data.message);
+                    } else {
+                        alert(data.error || 'Upload failed');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error uploading file:', error);
+                    isUploading = false;
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalBtnText;
+                    // fallback to regular form submission
+                    uploadForm.submit();
+                });
+            });
+        }
+
+        // handle quick file upload from chat
+        const quickFileInput = document.getElementById('quick-file-upload');
+        if (quickFileInput) {
+            quickFileInput.addEventListener('change', function(e) {
+                if (this.files && this.files.length > 0) {
+                    const uploadedFile = this.files[0];
+                    
+                    // confirm upload
+                    if (!confirm(`Upload "${uploadedFile.name}" to study materials?`)) {
+                        this.value = ''; // clear the input
+                        return;
+                    }
+                    
+                    // create form data
+                    const formData = new FormData();
+                    formData.append('file', uploadedFile);
+                    
+                    // disable the file button during upload
+                    const fileBtn = document.querySelector('.file-upload-btn');
+                    if (fileBtn) {
+                        fileBtn.style.opacity = '0.6';
+                        fileBtn.style.pointerEvents = 'none';
+                    }
+                    
+                    isUploading = true;
+                    
+                    // upload the file
+                    fetch('{{ url_for("upload_file", session_id=study_session.id) }}', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        isUploading = false;
+                        
+                        if (data.success) {
+                            // remove empty state if exists
+                            const emptyState = document.querySelector('.file-upload-section .empty-state');
+                            if (emptyState) {
+                                emptyState.remove();
+                            }
+
+                            // create files list if it doesn't exist
+                            let filesListContainer = document.getElementById('filesList');
+                            if (!filesListContainer) {
+                                filesListContainer = document.createElement('div');
+                                filesListContainer.id = 'filesList';
+                                filesListContainer.className = 'files-list';
+                                const fileSection = document.querySelector('.file-upload-section h2');
+                                if (fileSection) {
+                                    fileSection.insertAdjacentElement('afterend', filesListContainer);
+                                }
+                            }
+
+                            // add the new file only if it doesn't exist
+                            if (filesListContainer && data.file && !fileExists(data.file.id)) {
+                                const fileElement = createFileElement(data.file);
+                                filesListContainer.appendChild(fileElement);
+                                lastFileId = Math.max(lastFileId, data.file.id);
+                            }
+                            
+                            alert('File uploaded successfully!');
+                        } else {
+                            alert(data.error || 'Upload failed');
+                        }
+                        
+                        // re-enable button and clear input
+                        if (fileBtn) {
+                            fileBtn.style.opacity = '1';
+                            fileBtn.style.pointerEvents = 'auto';
+                        }
+                        quickFileInput.value = '';
+                    })
+                    .catch(error => {
+                        console.error('Error uploading file:', error);
+                        alert('Failed to upload file. Please try again.');
+                        
+                        isUploading = false;
+                        
+                        // re-enable button and clear input
+                        if (fileBtn) {
+                            fileBtn.style.opacity = '1';
+                            fileBtn.style.pointerEvents = 'auto';
+                        }
+                        quickFileInput.value = '';
+                    });
+                }
+            });
+        }
+
+        // initialize and start polling
+        initLastFileId();
+        
+        // poll every 5 seconds for new files
+        filePollInterval = setInterval(pollFiles, 5000);
+        
+        // stop polling when user leaves page
+        window.addEventListener('beforeunload', function() {
+            clearInterval(filePollInterval);
+        });
+    })();
+    </script>
 
     {% if is_creator %}
     <div class="creator-actions">

@@ -329,16 +329,70 @@ def detail(session_id):
 @login_required
 def post_message(session_id):
     message_text = request.form.get('message_text', '')
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     if message_text.strip():
         conn = get_db()
         conn.execute('INSERT INTO messages (session_id, user_id, message_text) VALUES (?, ?, ?)',
                      (session_id, session['user_id'], message_text))
         conn.commit()
+        
+        # get the newly created message for AJAX response
+        new_message = conn.execute('''
+            SELECT m.*, u.full_name, u.username
+            FROM messages m
+            JOIN users u ON m.user_id = u.id
+            WHERE m.session_id = ? AND m.user_id = ?
+            ORDER BY m.created_at DESC
+            LIMIT 1
+        ''', (session_id, session['user_id'])).fetchone()
         conn.close()
+        
+        if is_ajax:
+            return jsonify({
+                'success': True,
+                'message': {
+                    'id': new_message['id'],
+                    'full_name': new_message['full_name'],
+                    'username': new_message['username'],
+                    'message_text': new_message['message_text'],
+                    'created_at': new_message['created_at'],
+                    'user_id': new_message['user_id']
+                }
+            })
+        
         flash('Message posted!')
     
+    if is_ajax:
+        return jsonify({'success': False, 'error': 'Empty message'})
+    
     return redirect(url_for('detail', session_id=session_id))
+
+@app.route('/session/<int:session_id>/messages')
+def get_messages(session_id):
+    """API endpoint to fetch messages for real-time updates"""
+    last_message_id = request.args.get('last_id', 0, type=int)
+    
+    conn = get_db()
+    messages = conn.execute('''
+        SELECT m.*, u.full_name, u.username
+        FROM messages m
+        JOIN users u ON m.user_id = u.id
+        WHERE m.session_id = ? AND m.id > ?
+        ORDER BY m.created_at ASC
+    ''', (session_id, last_message_id)).fetchall()
+    conn.close()
+    
+    return jsonify({
+        'messages': [{
+            'id': msg['id'],
+            'full_name': msg['full_name'],
+            'username': msg['username'],
+            'message_text': msg['message_text'],
+            'created_at': msg['created_at'],
+            'user_id': msg['user_id']
+        } for msg in messages]
+    })
 
 @app.route('/session/<int:session_id>/invite', methods=['POST'])
 @login_required
@@ -497,14 +551,31 @@ def upload_file(session_id):
         file_type = original_filename.rsplit('.', 1)[1].lower()
         
         # store file info in database
-        conn.execute('''INSERT INTO files (session_id, user_id, filename, original_filename, file_size, file_type) 
+        cursor = conn.execute('''INSERT INTO files (session_id, user_id, filename, original_filename, file_size, file_type) 
                        VALUES (?, ?, ?, ?, ?, ?)''',
                     (session_id, session['user_id'], filename, original_filename, file_size, file_type))
+        file_id = cursor.lastrowid
         conn.commit()
+        
+        # get user info for AJAX response
+        user_info = conn.execute('SELECT full_name, username FROM users WHERE id = ?', 
+                                 (session['user_id'],)).fetchone()
         conn.close()
         
         if is_ajax:
-            return jsonify({'success': True, 'message': f'File "{original_filename}" uploaded successfully!'}), 200
+            return jsonify({
+                'success': True, 
+                'message': f'File "{original_filename}" uploaded successfully!',
+                'file': {
+                    'id': file_id,
+                    'original_filename': original_filename,
+                    'file_size': file_size,
+                    'file_type': file_type,
+                    'full_name': user_info['full_name'],
+                    'username': user_info['username'],
+                    'uploaded_at': datetime.now().isoformat()
+                }
+            }), 200
         flash(f'File "{original_filename}" uploaded successfully!')
     else:
         error_msg = 'Invalid file type. Allowed types: images, PDFs, Office documents, text files, archives'
@@ -514,6 +585,33 @@ def upload_file(session_id):
         flash(error_msg)
     
     return redirect(url_for('detail', session_id=session_id))
+
+@app.route('/session/<int:session_id>/files')
+def get_files(session_id):
+    """API endpoint to fetch files for real-time updates"""
+    last_file_id = request.args.get('last_id', 0, type=int)
+    
+    conn = get_db()
+    files = conn.execute('''
+        SELECT f.*, u.full_name, u.username
+        FROM files f
+        JOIN users u ON f.user_id = u.id
+        WHERE f.session_id = ? AND f.id > ?
+        ORDER BY f.uploaded_at ASC
+    ''', (session_id, last_file_id)).fetchall()
+    conn.close()
+    
+    return jsonify({
+        'files': [{
+            'id': f['id'],
+            'original_filename': f['original_filename'],
+            'file_size': f['file_size'],
+            'file_type': f['file_type'],
+            'full_name': f['full_name'],
+            'username': f['username'],
+            'uploaded_at': f['uploaded_at']
+        } for f in files]
+    })
 
 @app.route('/file/<int:file_id>/download')
 @login_required
