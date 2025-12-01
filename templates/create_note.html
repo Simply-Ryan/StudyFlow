@@ -31,8 +31,12 @@
         </div>
 
         <div class="form-group">
-            <label for="content">Note Content *</label>
-            <textarea id="content" name="content" rows="15" required placeholder="Write your notes here..."></textarea>
+            <label for="content">Note Content * <small style="font-weight: normal; color: #718096;">(Supports Markdown & Math)</small></label>
+            <textarea id="content" name="content" rows="15" required placeholder="Write your notes here... You can use Markdown formatting and math equations!"></textarea>
+            <small class="form-hint" style="display: block; margin-top: 0.5rem;">
+                <strong>Markdown:</strong> **bold**, *italic*, `code`, # Heading, - List item, [link](url)<br>
+                <strong>Math:</strong> Inline: $E=mc^2$, Display: $$\\int_0^1 x^2 dx$$
+            </small>
         </div>
         
         <input type="hidden" id="session_id" name="session_id" value="{{ session_id }}">
@@ -46,13 +50,13 @@
         </div>
 
         <div class="form-actions">
-            <button type="submit" class="btn-primary">Create Note</button>
+            <button type="submit" class="btn-primary" id="submitBtn">Create Note</button>
             <a href="{{ url_for('notes') }}" class="btn-secondary">Cancel</a>
         </div>
     </form>
 </div>
 
-<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<script src="https://cdn.tiny.cloud/1/qp5khrwdv2iwdfuxxdlcio55hxgrct3f1rzu730jfig8ss6g/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
 <script>
 tinymce.init({
     selector: '#content',
@@ -66,37 +70,49 @@ tinymce.init({
     toolbar: 'undo redo | blocks | ' +
         'bold italic forecolor | alignleft aligncenter ' +
         'alignright alignjustify | bullist numlist outdent indent | ' +
-        'removeformat | help',
+        'removeformat | code | help',
     content_style: 'body { font-family:Inter,sans-serif; font-size:14px }',
     auto_focus: 'content',
     branding: false,
     promotion: false,
     setup: function(editor) {
-        // Auto-save every 30 seconds
+        const titleField = document.getElementById('title');
+        const form = document.querySelector('form');
+        
+        // Before form submit, save TinyMCE content to textarea
+        form.addEventListener('submit', function(e) {
+            editor.save(); // This saves TinyMCE content back to the textarea
+        });
+        
+        // Auto-save draft every 30 seconds
         setInterval(function() {
             if (editor.isDirty()) {
                 const content = editor.getContent();
-                const title = document.getElementById('title').value;
+                const title = titleField.value;
                 if (title && content) {
-                    // Save draft to localStorage
                     localStorage.setItem('note_draft', JSON.stringify({
                         title: title,
                         content: content,
                         timestamp: new Date().toISOString()
                     }));
-                    console.log('Draft auto-saved');
+                    console.log('Draft auto-saved at ' + new Date().toLocaleTimeString());
                 }
             }
         }, 30000);
         
-        // Load draft if exists
+        // Load draft on init if exists
         editor.on('init', function() {
             const draft = localStorage.getItem('note_draft');
             if (draft) {
-                const draftData = JSON.parse(draft);
-                if (confirm('A draft was found. Would you like to restore it?')) {
-                    document.getElementById('title').value = draftData.title;
-                    editor.setContent(draftData.content);
+                try {
+                    const draftData = JSON.parse(draft);
+                    const draftTime = new Date(draftData.timestamp).toLocaleString();
+                    if (confirm(`A draft from ${draftTime} was found. Would you like to restore it?`)) {
+                        titleField.value = draftData.title;
+                        editor.setContent(draftData.content);
+                    }
+                } catch (e) {
+                    console.error('Error loading draft:', e);
                 }
             }
         });

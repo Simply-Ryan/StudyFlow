@@ -162,7 +162,7 @@
                                     <span>Replying to {{ item.parent_info.author }}: "{% if item.parent_info.text|length > 50 %}{{ item.parent_info.text[:50] }}...{% else %}{{ item.parent_info.text }}{% endif %}"</span>
                                 </div>
                             {% endif %}
-                            <div class="message-text">{{ item.message_text }}</div>
+                            <div class="message-text markdown-content">{{ item.message_text|markdown|safe }}</div>
                             {% if item.reactions %}
                                 <div class="message-reactions">
                                     {% for reaction in item.reactions %}
@@ -261,6 +261,7 @@
         {% endif %}
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
     // real-time chat updates
     (function() {
@@ -407,12 +408,27 @@
                     <span class="message-time">${escapeHtml(item.created_at)}</span>
                 </div>
                 ${parentHtml}
-                <div class="message-text">${escapeHtml(item.message_text)}</div>
+                <div class="message-text markdown-content">${marked.parse(item.message_text)}</div>
                 ${reactionsHtml}
                 ${actionsHtml}
             `;
             
             return div;
+        }
+        
+        // Render math in element
+        function renderMath(element) {
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(element, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\[', right: '\\]', display: true},
+                        {left: '\\(', right: '\\)', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
         }
 
         // escape HTML to prevent XSS
@@ -466,6 +482,9 @@
                 const msgElement = createMessageElement(msg);
                 messagesContainer.appendChild(msgElement);
                 lastMessageId = Math.max(lastMessageId, msg.id);
+                
+                // Render math in the new message
+                renderMath(msgElement);
                 
                 // scroll to bottom
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;

@@ -44,9 +44,58 @@
 
     <div class="note-content-section">
         <h2><i class="fas fa-file-alt"></i> Content</h2>
-        <div class="note-content">
-            {{ note.content|replace('\n', '<br>')|safe }}
+        <div class="note-content markdown-content" id="noteContent">
+            {{ note.content|markdown|safe }}
         </div>
+        
+        {% if 'user_id' in session %}
+        <!-- AI Assistant Panel -->
+        <div class="ai-assistant-panel">
+            <div class="ai-header">
+                <h3><i class="fas fa-robot"></i> AI Study Assistant</h3>
+                <button class="ai-toggle-btn" onclick="toggleAIPanel()">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+            <div class="ai-content" id="aiContent" style="display: none;">
+                <div class="ai-actions">
+                    <button class="ai-action-btn" onclick="aiAction('quiz')">
+                        <i class="fas fa-question-circle"></i> Generate Quiz
+                    </button>
+                    <button class="ai-action-btn" onclick="aiAction('summarize')">
+                        <i class="fas fa-compress-alt"></i> Summarize
+                    </button>
+                    <button class="ai-action-btn" onclick="aiAction('explain')">
+                        <i class="fas fa-lightbulb"></i> Explain Topic
+                    </button>
+                    <button class="ai-action-btn" onclick="aiAction('study_guide')">
+                        <i class="fas fa-book"></i> Create Study Guide
+                    </button>
+                </div>
+                
+                <div class="ai-chat-section">
+                    <div class="ai-input-group">
+                        <input type="text" id="aiQuestion" placeholder="Ask a question about this note..." 
+                               onkeypress="if(event.key === 'Enter') askQuestion()">
+                        <button class="btn-primary" onclick="askQuestion()">
+                            <i class="fas fa-paper-plane"></i> Ask
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="ai-response" id="aiResponse" style="display: none;">
+                    <div class="ai-response-header">
+                        <strong><i class="fas fa-robot"></i> AI Response</strong>
+                        <button class="ai-close-btn" onclick="closeAIResponse()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="ai-response-content markdown-content" id="aiResponseContent"></div>
+                    <div class="ai-response-meta" id="aiResponseMeta"></div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <div class="note-files-section">
@@ -114,8 +163,8 @@
                     <strong>{{ comment.full_name }}</strong>
                     <span class="comment-date">{{ comment.created_at[:16] }}</span>
                 </div>
-                <div class="comment-body">
-                    {{ comment.comment_text }}
+                <div class="comment-body markdown-content">
+                    {{ comment.comment_text|markdown|safe }}
                 </div>
             </div>
             {% endfor %}
@@ -241,6 +290,166 @@
     background: #fafafa;
     border-radius: 6px;
     white-space: pre-wrap;
+}
+
+/* AI Assistant Styles */
+.ai-assistant-panel {
+    margin-top: 30px;
+    border-top: 2px solid #f0f0f0;
+    padding-top: 20px;
+}
+
+.ai-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.ai-header h3 {
+    margin: 0;
+    color: #667eea;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ai-toggle-btn {
+    background: none;
+    border: none;
+    color: #667eea;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: all 0.3s;
+}
+
+.ai-toggle-btn:hover {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.ai-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.ai-action-btn {
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.ai-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.ai-action-btn i {
+    font-size: 1.1rem;
+}
+
+.ai-input-group {
+    display: flex;
+    gap: 10px;
+}
+
+.ai-input-group input {
+    flex: 1;
+    padding: 12px 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.ai-input-group input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.ai-response {
+    margin-top: 20px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    border: 2px solid #667eea;
+    border-radius: 12px;
+}
+
+.ai-response-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.ai-response-header strong {
+    color: #667eea;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ai-close-btn {
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 5px;
+    transition: color 0.3s;
+}
+
+.ai-close-btn:hover {
+    color: #667eea;
+}
+
+.ai-response-content {
+    line-height: 1.8;
+    color: #333;
+}
+
+.ai-response-meta {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(102, 126, 234, 0.2);
+    font-size: 0.85rem;
+    color: #666;
+    text-align: right;
+}
+
+.ai-loading {
+    text-align: center;
+    color: #667eea;
+    padding: 20px;
+    font-size: 1.1rem;
+}
+
+.ai-loading i {
+    margin-right: 10px;
+}
+
+.error-message {
+    color: #dc3545;
+    padding: 15px;
+    background: #fff5f5;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .file-upload-area {
@@ -435,6 +644,133 @@ document.getElementById('fileInput')?.addEventListener('change', function() {
         });
     });
 })();
+
+// AI Assistant Functions
+function toggleAIPanel() {
+    const aiContent = document.getElementById('aiContent');
+    const toggleBtn = document.querySelector('.ai-toggle-btn i');
+    
+    if (aiContent.style.display === 'none') {
+        aiContent.style.display = 'block';
+        toggleBtn.classList.remove('fa-chevron-down');
+        toggleBtn.classList.add('fa-chevron-up');
+    } else {
+        aiContent.style.display = 'none';
+        toggleBtn.classList.remove('fa-chevron-up');
+        toggleBtn.classList.add('fa-chevron-down');
+    }
+}
+
+function aiAction(action) {
+    const noteContent = document.getElementById('noteContent').textContent.trim();
+    
+    if (!noteContent) {
+        alert('No content to process');
+        return;
+    }
+    
+    // Show loading state
+    const responseDiv = document.getElementById('aiResponse');
+    const responseContent = document.getElementById('aiResponseContent');
+    responseDiv.style.display = 'block';
+    responseContent.innerHTML = '<div class="ai-loading"><i class="fas fa-spinner fa-spin"></i> Processing...</div>';
+    
+    // Call AI API
+    fetch('/api/ai-assist', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            action: action,
+            content: noteContent
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            responseContent.innerHTML = marked.parse(data.response);
+            // Render math if present
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(responseContent, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\[', right: '\\]', display: true},
+                        {left: '\\(', right: '\\)', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+            document.getElementById('aiResponseMeta').textContent = `Tokens used: ${data.tokens_used}`;
+        } else {
+            responseContent.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-triangle"></i> ${data.error}</div>`;
+        }
+    })
+    .catch(error => {
+        console.error('AI Error:', error);
+        responseContent.innerHTML = '<div class="error-message"><i class="fas fa-exclamation-triangle"></i> Failed to connect to AI service</div>';
+    });
+}
+
+function askQuestion() {
+    const question = document.getElementById('aiQuestion').value.trim();
+    const noteContent = document.getElementById('noteContent').textContent.trim();
+    
+    if (!question) {
+        alert('Please enter a question');
+        return;
+    }
+    
+    // Show loading state
+    const responseDiv = document.getElementById('aiResponse');
+    const responseContent = document.getElementById('aiResponseContent');
+    responseDiv.style.display = 'block';
+    responseContent.innerHTML = '<div class="ai-loading"><i class="fas fa-spinner fa-spin"></i> Thinking...</div>';
+    
+    // Call AI API
+    fetch('/api/ai-assist', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            action: 'answer',
+            content: noteContent,
+            question: question
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            responseContent.innerHTML = marked.parse(data.response);
+            // Render math if present
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(responseContent, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\[', right: '\\]', display: true},
+                        {left: '\\(', right: '\\)', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+            document.getElementById('aiResponseMeta').textContent = `Tokens used: ${data.tokens_used}`;
+            document.getElementById('aiQuestion').value = '';
+        } else {
+            responseContent.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-triangle"></i> ${data.error}</div>`;
+        }
+    })
+    .catch(error => {
+        console.error('AI Error:', error);
+        responseContent.innerHTML = '<div class="error-message"><i class="fas fa-exclamation-triangle"></i> Failed to connect to AI service</div>';
+    });
+}
+
+function closeAIResponse() {
+    document.getElementById('aiResponse').style.display = 'none';
+}
 </script>
 
 {% endblock %}

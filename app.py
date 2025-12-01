@@ -2,10 +2,10 @@
 StudyFlow - Collaborative Study Session Platform
 
 A comprehensive Flask application for managing study sessions with real-time chat,
-flashcards, notes, analytics, and user profiles.
+flashcards, notes, analytics, user profiles, and AI-powered study assistance.
 
 Author: StudyFlow Team
-Version: 1.15.0
+Version: 1.16.0
 Date: December 2025
 """
 
@@ -22,7 +22,10 @@ from werkzeug.utils import secure_filename
 from functools import wraps
 from apscheduler.schedulers.background import BackgroundScheduler
 from ics import Calendar, Event
+import markdown
 import atexit
+from openai import OpenAI
+from config import Config
 
 # ============================================
 # APPLICATION CONFIGURATION
@@ -32,9 +35,21 @@ app = Flask(__name__)
 # Security: Secret key for session management and CSRF protection
 app.secret_key = 'f47cba5d7844e3b4cc01994acb8de040c559faf14e9284d5530eeb02055d150b'
 app.config['SECRET_KEY'] = app.secret_key
+app.config.from_object(Config)
 
 # WebSocket: Initialize SocketIO for real-time features
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# AI Configuration: Initialize OpenAI client
+openai_client = None
+if Config.OPENAI_API_KEY and Config.AI_ENABLED:
+    try:
+        openai_client = OpenAI(api_key=Config.OPENAI_API_KEY)
+        print("✅ AI Assistant enabled with OpenAI")
+    except Exception as e:
+        print(f"⚠️ AI Assistant initialization failed: {e}")
+else:
+    print("ℹ️ AI Assistant disabled. Set OPENAI_API_KEY and AI_ENABLED=true to enable.")
 
 # Database Configuration
 DATABASE = 'sessions.db'
@@ -127,6 +142,21 @@ def format_time_remaining(session_date_str):
         return None
 
 app.jinja_env.globals.update(format_time_remaining=format_time_remaining)
+
+def markdown_to_html(text):
+    """Convert markdown text to safe HTML.
+    
+    Args:
+        text: Markdown formatted text
+        
+    Returns:
+        HTML string with markdown rendered
+    """
+    if not text:
+        return ""
+    return markdown.markdown(text, extensions=['fenced_code', 'codehilite', 'tables', 'nl2br', 'extra'])
+
+app.jinja_env.filters['markdown'] = markdown_to_html
 
 def allowed_file(filename):
     """Check if uploaded file extension is allowed.
@@ -1765,19 +1795,22 @@ def study_deck(deck_id):
     c = conn.cursor()
     
     # Get deck info
-    deck = c.execute('''
+    deck_row = c.execute('''
         SELECT d.*, u.full_name as creator_name
         FROM flashcard_decks d
         LEFT JOIN users u ON d.user_id = u.id
         WHERE d.id = ? AND (d.user_id = ? OR d.is_public = 1)
     ''', (deck_id, session['user_id'])).fetchone()
     
-    if not deck:
+    if not deck_row:
         flash('Deck not found or access denied')
         return redirect(url_for('flashcards'))
     
+    # Convert deck Row to dict
+    deck = dict(deck_row)
+    
     # Get cards due for review (SM-2 algorithm)
-    cards = c.execute('''
+    cards_rows = c.execute('''
         SELECT f.*, p.easiness_factor, p.interval, p.repetitions, p.next_review_date
         FROM flashcards f
         LEFT JOIN flashcard_progress p ON f.id = p.flashcard_id AND p.user_id = ?
@@ -1785,6 +1818,9 @@ def study_deck(deck_id):
         AND (p.next_review_date IS NULL OR p.next_review_date <= datetime('now'))
         ORDER BY p.next_review_date ASC
     ''', (session['user_id'], deck_id)).fetchall()
+    
+    # Convert cards Rows to list of dicts
+    cards = [dict(row) for row in cards_rows]
     
     conn.close()
     
@@ -2695,6 +2731,137 @@ def delete_note_file(file_id):
     conn.close()
     return redirect(url_for('view_note', note_id=note_id))
 
+# ============================================
+# AI ASSISTANT ROUTES
+# ============================================
+
+@app.route('/api/ai-assist', methods=['POST'])
+@login_required
+def ai_assist():
+    """AI assistant endpoint for various study-related tasks
+    
+    Handles:
+    - Generate quiz questions from content
+    - Summarize documents
+    - Explain complex topics
+    - Create study guides
+    - Answer questions about content
+    """
+    if not openai_client:
+        return jsonify({
+            'success': False,
+            'error': 'AI Assistant is not enabled. Please configure OPENAI_API_KEY.'
+        }), 503
+    
+    data = request.json
+    action = data.get('action')
+    content = data.get('content', '')
+    question = data.get('question', '')
+    
+    if not action:
+        return jsonify({'success': False, 'error': 'Action is required'}), 400
+    
+    try:
+        # Prepare system prompts based on action
+        system_prompts = {
+            'quiz': "You are a helpful study assistant. Generate quiz questions based on the provided content. Create 5 multiple-choice questions with 4 options each, and include the correct answers. Format the output clearly with question numbers.",
+            'summarize': "You are a helpful study assistant. Provide a clear, concise summary of the provided content. Focus on key points, main ideas, and important concepts. Use bullet points where appropriate.",
+            'explain': "You are a helpful study assistant. Explain the following topic or question in simple, easy-to-understand terms. Break down complex concepts and provide examples where helpful.",
+            'study_guide': "You are a helpful study assistant. Create a comprehensive study guide from the provided content. Include: key concepts, definitions, important points to remember, and suggested review questions. Use clear formatting with headers and bullet points.",
+            'answer': "You are a helpful study assistant. Answer the question based on the provided content. Be clear, accurate, and concise. If the content doesn't contain enough information to answer, state that clearly."
+        }
+        
+        system_prompt = system_prompts.get(action, system_prompts['explain'])
+        
+        # Build user message
+        if action == 'answer':
+            user_message = f"Question: {question}\n\nContent:\n{content}"
+        else:
+            user_message = content
+        
+        # Call OpenAI API
+        response = openai_client.chat.completions.create(
+            model=Config.AI_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=Config.AI_MAX_TOKENS,
+            temperature=0.7
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        # Log usage for tracking
+        tokens_used = response.usage.total_tokens
+        print(f"AI Assistant used {tokens_used} tokens for action: {action}")
+        
+        return jsonify({
+            'success': True,
+            'response': ai_response,
+            'tokens_used': tokens_used
+        })
+        
+    except Exception as e:
+        print(f"AI Assistant error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'AI request failed: {str(e)}'
+        }), 500
+
+@app.route('/api/ai-chat', methods=['POST'])
+@login_required
+def ai_chat():
+    """Interactive AI chat for study assistance
+    
+    Maintains conversation context for follow-up questions
+    """
+    if not openai_client:
+        return jsonify({
+            'success': False,
+            'error': 'AI Assistant is not enabled.'
+        }), 503
+    
+    data = request.json
+    messages = data.get('messages', [])
+    context = data.get('context', '')  # Optional: note content for context
+    
+    if not messages:
+        return jsonify({'success': False, 'error': 'Messages are required'}), 400
+    
+    try:
+        # Add system message with context if provided
+        api_messages = [
+            {"role": "system", "content": f"You are a helpful study assistant. Help the user understand and learn from their study materials. {'Context: ' + context if context else 'Answer questions clearly and concisely.'}"}
+        ]
+        
+        # Add conversation history
+        api_messages.extend(messages)
+        
+        # Call OpenAI API
+        response = openai_client.chat.completions.create(
+            model=Config.AI_MODEL,
+            messages=api_messages,
+            max_tokens=Config.AI_MAX_TOKENS,
+            temperature=0.7
+        )
+        
+        ai_response = response.choices[0].message.content
+        tokens_used = response.usage.total_tokens
+        
+        return jsonify({
+            'success': True,
+            'response': ai_response,
+            'tokens_used': tokens_used
+        })
+        
+    except Exception as e:
+        print(f"AI Chat error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'AI chat failed: {str(e)}'
+        }), 500
+
 # set up background scheduler to run every 30 minutes
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_and_send_reminders, trigger="interval", minutes=30)
@@ -2709,7 +2876,7 @@ atexit.register(lambda: scheduler.shutdown())
 
 @socketio.on('join_session')
 def handle_join_session(data):
-    \"\"\"Handle user joining a session room for real-time chat and updates.\"\"\"
+    """Handle user joining a session room for real-time chat and updates."""
     session_id = data.get('session_id')
     user_id = data.get('user_id')
     user_name = data.get('user_name')
@@ -2717,7 +2884,7 @@ def handle_join_session(data):
     if session_id:
         room = f'session_{session_id}'
         join_room(room)
-        print(f\"User {user_name} (ID: {user_id}) joined room: {room}\")
+        print(f"User {user_name} (ID: {user_id}) joined room: {room}")
         
         # Broadcast user presence to others in the room
         if user_id and user_name:

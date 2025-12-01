@@ -90,6 +90,7 @@
     {% endif %}
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
 const cards = {{ cards|tojson }};
 let currentCardIndex = 0;
@@ -103,8 +104,34 @@ function loadCard(index) {
     }
     
     const card = cards[index];
-    document.getElementById('questionText').textContent = card.question;
-    document.getElementById('answerText').textContent = card.answer;
+    const questionEl = document.getElementById('questionText');
+    const answerEl = document.getElementById('answerText');
+    
+    questionEl.innerHTML = marked.parse(card.question);
+    answerEl.innerHTML = marked.parse(card.answer);
+    
+    // Render math equations
+    if (typeof renderMathInElement !== 'undefined') {
+        renderMathInElement(questionEl, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\[', right: '\\]', display: true},
+                {left: '\\(', right: '\\)', display: false}
+            ],
+            throwOnError: false
+        });
+        renderMathInElement(answerEl, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\[', right: '\\]', display: true},
+                {left: '\\(', right: '\\)', display: false}
+            ],
+            throwOnError: false
+        });
+    }
+    
     document.getElementById('flashcard').dataset.flipped = 'false';
     document.getElementById('studyControls').style.display = 'none';
     

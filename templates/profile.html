@@ -8,7 +8,7 @@
         <div class="profile-avatar-section">
             {% if user.avatar_filename %}
             <img src="{{ url_for('serve_avatar', filename=user.avatar_filename) }}" 
-                 alt="{{ user.full_name }}" class="profile-avatar">
+                 alt="{{ user.full_name }}'s profile picture" class="profile-avatar">
             {% else %}
             <div class="profile-avatar-placeholder">
                 <i class="fas fa-user"></i>

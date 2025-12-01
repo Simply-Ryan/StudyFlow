@@ -32,6 +32,17 @@ A collaborative study session management web application built for **HackDécouv
 - **Real-Time Viewers**: See who's currently viewing each note
 - **Version Tracking**: Updated timestamps on all note changes
 - **Public/Private Notes**: Control note visibility
+- **Markdown & Math Support**: Full markdown rendering with LaTeX equations (KaTeX)
+
+### 🤖 AI Study Assistant (NEW!)
+- **Powered by OpenAI**: GPT-4o-mini integration for intelligent study help
+- **Generate Quiz Questions**: Automatically create practice quizzes from notes
+- **Smart Summarization**: Condense long notes into key points
+- **Explain Topics**: Get simple explanations of complex concepts
+- **Study Guide Creation**: Comprehensive study guides with definitions and review questions
+- **Interactive Q&A**: Ask questions about your note content
+- **Context-Aware Responses**: AI understands your study materials
+- **See [AI_ASSISTANT_GUIDE.md](AI_ASSISTANT_GUIDE.md) for setup instructions**
 
 ### 🔔 Notification System
 - **In-App Notifications**: Bell icon in navbar with unread count badge

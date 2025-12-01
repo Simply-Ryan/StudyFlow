@@ -12,7 +12,7 @@
                 <div class="current-avatar">
                     {% if user.avatar_filename %}
                     <img src="{{ url_for('serve_avatar', filename=user.avatar_filename) }}" 
-                         alt="Current avatar" id="avatarPreview">
+                         alt="{{ user.full_name }}'s avatar" id="avatarPreview">
                     {% else %}
                     <div class="avatar-placeholder" id="avatarPreview">
                         <i class="fas fa-user"></i>

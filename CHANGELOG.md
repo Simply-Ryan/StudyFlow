@@ -15,6 +15,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.16.0] - 2025-12-01
+
+### Added
+- **🤖 AI Study Assistant**
+  - OpenAI GPT-4o-mini integration for intelligent study help
+  - Generate quiz questions from note content
+  - Summarize long documents into key points
+  - Explain complex topics in simple terms
+  - Create comprehensive study guides
+  - Interactive Q&A with context-aware responses
+  - Markdown and math rendering for AI responses
+  - Token usage tracking for cost monitoring
+  - Configuration via environment variables
+  - New routes: `/api/ai-assist` and `/api/ai-chat`
+  - Comprehensive setup guide: `AI_ASSISTANT_GUIDE.md`
+  - Example environment configuration: `.env.example`
+
+### Changed
+- Updated `requirements.txt` to include `openai==1.54.5`
+- Enhanced `config.py` with AI configuration options
+- Updated README with AI features section
+- Added AI assistant panel to note viewing page
+
+### Documentation
+- Created `AI_ASSISTANT_GUIDE.md` with setup and usage instructions
+- Created `.env.example` for environment variable configuration
+- Added API endpoint documentation for AI features
+
+---
+
 ## [1.15.0] - 2025-12-01
 
 ### Added

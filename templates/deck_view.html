@@ -30,17 +30,18 @@
 {% if deck.user_id == session.user_id %}
 <div class="add-card-section">
     <h2><i class="fas fa-plus"></i> Add New Card</h2>
+    <p style="color: #718096; margin-bottom: 1rem;"><i class="fas fa-markdown"></i> Supports Markdown & Math equations</p>
     <form method="POST" action="{{ url_for('add_card', deck_id=deck.id) }}" class="add-card-form">
         <div class="card-input-group">
             <div class="form-group">
                 <label for="question">Question/Front</label>
                 <textarea id="question" name="question" rows="3" required 
-                          placeholder="Enter the question or term"></textarea>
+                          placeholder="Enter the question (Markdown & Math: $x^2$, $$\\sum_{i=1}^n i$$)"></textarea>
             </div>
             <div class="form-group">
                 <label for="answer">Answer/Back</label>
                 <textarea id="answer" name="answer" rows="3" required 
-                          placeholder="Enter the answer or definition"></textarea>
+                          placeholder="Enter the answer (Markdown & Math: $x^2$, $$\\sum_{i=1}^n i$$)"></textarea>
             </div>
         </div>
         <button type="submit" class="btn-add-card">
@@ -59,14 +60,14 @@
         <div class="flashcard-preview">
             <div class="card-number">#{{ loop.index }}</div>
             <div class="card-content">
-                <div class="card-side">
-                    <strong>Q:</strong> {{ card.question }}
+                <div class="card-side markdown-content">
+                    <strong>Q:</strong> {{ card.question|markdown|safe }}
                 </div>
                 <div class="card-divider">
                     <i class="fas fa-arrow-down"></i>
                 </div>
-                <div class="card-side">
-                    <strong>A:</strong> {{ card.answer }}
+                <div class="card-side markdown-content">
+                    <strong>A:</strong> {{ card.answer|markdown|safe }}
                 </div>
             </div>
         </div>
