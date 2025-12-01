@@ -8,10 +8,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- User profiles with avatars and preferences
 - Email notifications system
 - Video/audio call integration
 - Admin dashboard
+- Theme customization (blue, green, dark modes)
+
+---
+
+## [1.15.0] - 2025-12-01
+
+### Added
+- **👤 User Profiles & Settings**
+  - Public user profile pages with avatar, bio, and stats
+  - Avatar upload with image preview
+  - Profile statistics dashboard:
+    * Total sessions created/joined
+    * Messages sent
+    * Notes created
+    * Study streak tracking
+  - Recent activity display (sessions & public notes)
+  - Edit profile page with avatar upload
+  - Settings page for preferences:
+    * Email notification toggles
+    * Session reminder preferences
+    * Message notification settings
+    * Theme selection (purple/blue/green/dark)
+    * Privacy information
+  - Profile link in navbar (click username)
+  - Settings icon in navigation
+
+### Technical
+- New database columns on `users` table:
+  * `avatar_filename`: Store uploaded avatar
+  * `bio`: User biography text
+  * `last_login`: Track last login timestamp
+- New tables:
+  * `user_settings`: Notification preferences, theme, language, timezone
+  * `user_stats`: Activity tracking (sessions, messages, notes, study streak)
+- Routes:
+  * `/profile/<user_id>`: View user profile
+  * `/profile/edit`: Edit own profile with avatar upload
+  * `/settings`: User preferences and settings
+  * `/uploads/avatars/<filename>`: Serve avatar images
+- Avatar storage: `uploads/avatars/` directory
+- Automatic stats initialization for existing users
+- Migration script: `migrate_profiles.py`
+
+### UI/UX
+- Profile avatar display (150px circular)
+- Avatar placeholder with gradient background
+- Profile stats cards with color-coded icons
+- Activity sections for recent sessions and notes
+- Avatar upload with live preview
+- Clean settings interface with toggle switches
+- Mobile-responsive profile and settings pages
+- Privacy information display
 
 ---
 

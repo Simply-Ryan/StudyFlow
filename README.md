@@ -77,6 +77,14 @@ A collaborative study session management web application built for **HackDécouv
 - **Study Mode**: Beautiful interface with progress tracking and statistics
 - **Auto Scheduling**: Cards automatically scheduled based on your performance
 
+### 👤 User Profiles & Settings
+- **Profile Pages**: Public profiles with avatar, bio, and activity stats
+- **Avatar Upload**: Custom profile pictures with live preview
+- **Statistics Dashboard**: Track sessions created/joined, messages, notes, study streaks
+- **Settings Page**: Configure email notifications, session reminders, theme preferences
+- **Privacy Controls**: Manage what's visible on your public profile
+- **Activity Feed**: View recent sessions and public notes
+
 ### 📅 Calendar Integration
 - **Add to Calendar**: Export sessions to Google Calendar, Outlook, or .ics file
 - **One-Click Sync**: Direct integration with Google and Outlook calendars

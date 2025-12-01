@@ -1701,14 +1701,26 @@ body {
    12. AUTHENTICATION & USER FEATURES
    ============================================ */
 
+/* User profile link in navbar */
+.user-profile-link {
+    text-decoration: none;
+    transition: transform 0.3s;
+}
+
+.user-profile-link:hover {
+    transform: scale(1.05);
+}
+
 /* User greeting in navbar */
 .user-greeting {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin: 0 15px;
     font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 /* Username badges */

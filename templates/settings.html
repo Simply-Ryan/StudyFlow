@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - StudyFlow{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <div class="settings-card">
+        <h1><i class="fas fa-cog"></i> Settings</h1>
+        
+        <form method="POST" action="{{ url_for('settings') }}">
+            <div class="settings-section">
+                <h2><i class="fas fa-bell"></i> Notifications</h2>
+                <p class="section-description">Manage how you receive notifications</p>
+                
+                <div class="setting-item">
+                    <label class="setting-label">
+                        <input type="checkbox" name="email_notifications" 
+                               {% if settings.email_notifications %}checked{% endif %}>
+                        <span class="setting-info">
+                            <strong>Email Notifications</strong>
+                            <small>Receive updates via email</small>
+                        </span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <label class="setting-label">
+                        <input type="checkbox" name="session_reminders" 
+                               {% if settings.session_reminders %}checked{% endif %}>
+                        <span class="setting-info">
+                            <strong>Session Reminders</strong>
+                            <small>Get reminded 24 hours before sessions</small>
+                        </span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <label class="setting-label">
+                        <input type="checkbox" name="message_notifications" 
+                               {% if settings.message_notifications %}checked{% endif %}>
+                        <span class="setting-info">
+                            <strong>Message Notifications</strong>
+                            <small>Notify when you receive new messages</small>
+                        </span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h2><i class="fas fa-palette"></i> Appearance</h2>
+                <p class="section-description">Customize your StudyFlow experience</p>
+                
+                <div class="setting-item">
+                    <label for="theme" class="setting-label-block">
+                        <strong>Theme</strong>
+                        <small>Choose your preferred color theme</small>
+                    </label>
+                    <select id="theme" name="theme" class="theme-select">
+                        <option value="purple" {% if settings.theme == 'purple' %}selected{% endif %}>
+                            Purple Gradient (Default)
+                        </option>
+                        <option value="blue" {% if settings.theme == 'blue' %}selected{% endif %}>
+                            Ocean Blue
+                        </option>
+                        <option value="green" {% if settings.theme == 'green' %}selected{% endif %}>
+                            Forest Green
+                        </option>
+                        <option value="dark" {% if settings.theme == 'dark' %}selected{% endif %}>
+                            Dark Mode
+                        </option>
+                    </select>
+                    <p class="theme-note"><i class="fas fa-info-circle"></i> Theme changes coming soon!</p>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h2><i class="fas fa-shield-alt"></i> Privacy</h2>
+                <p class="section-description">Control your privacy settings</p>
+                
+                <div class="privacy-info">
+                    <p><i class="fas fa-lock"></i> Your email address is never shared publicly</p>
+                    <p><i class="fas fa-eye"></i> Your profile stats are visible to other users</p>
+                    <p><i class="fas fa-globe"></i> Public notes and decks are visible to everyone</p>
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <a href="{{ url_for('profile', user_id=session.user_id) }}" class="btn-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-save"></i> Save Settings
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.settings-container {
+    max-width: 700px;
+    margin: 2rem auto;
+}
+
+.settings-card {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.settings-card h1 {
+    font-size: 2rem;
+    color: #2d3748;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.settings-section {
+    padding: 2rem 0;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.settings-section:last-of-type {
+    border-bottom: none;
+}
+
+.settings-section h2 {
+    font-size: 1.4rem;
+    color: #2d3748;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.section-description {
+    color: #718096;
+    margin-bottom: 1.5rem;
+}
+
+.setting-item {
+    margin-bottom: 1.5rem;
+}
+
+.setting-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    cursor: pointer;
+    padding: 1rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    transition: all 0.3s;
+}
+
+.setting-label:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.setting-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-top: 0.25rem;
+    cursor: pointer;
+}
+
+.setting-info {
+    flex: 1;
+}
+
+.setting-info strong {
+    display: block;
+    color: #2d3748;
+    margin-bottom: 0.25rem;
+}
+
+.setting-info small {
+    color: #718096;
+    font-size: 0.9rem;
+}
+
+.setting-label-block {
+    display: block;
+    margin-bottom: 0.75rem;
+}
+
+.setting-label-block strong {
+    display: block;
+    color: #2d3748;
+    margin-bottom: 0.25rem;
+}
+
+.setting-label-block small {
+    color: #718096;
+    font-size: 0.9rem;
+}
+
+.theme-select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 1rem;
+    transition: all 0.3s;
+    margin-bottom: 0.5rem;
+}
+
+.theme-select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.theme-note {
+    color: #a0aec0;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.privacy-info {
+    background: #f7fafc;
+    padding: 1.5rem;
+    border-radius: 10px;
+}
+
+.privacy-info p {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #4a5568;
+    margin-bottom: 0.75rem;
+}
+
+.privacy-info p:last-child {
+    margin-bottom: 0;
+}
+
+.privacy-info i {
+    color: #667eea;
+    width: 20px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+}
+
+.form-actions .btn-secondary,
+.form-actions .btn-primary {
+    padding: 0.75rem 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .settings-container {
+        margin: 1rem;
+    }
+    
+    .settings-card {
+        padding: 1.5rem;
+    }
+    
+    .settings-card h1 {
+        font-size: 1.5rem;
+    }
+    
+    .form-actions {
+        flex-direction: column-reverse;
+    }
+    
+    .form-actions .btn-secondary,
+    .form-actions .btn-primary {
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}

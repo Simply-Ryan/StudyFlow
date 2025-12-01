@@ -1653,6 +1653,175 @@ def review_card():
     })
 
 # ============================================
+# USER PROFILES & SETTINGS
+# ============================================
+
+@app.route('/profile/<int:user_id>')
+@login_required
+def profile(user_id):
+    """View user profile"""
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    # Get user info
+    user = c.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    
+    if not user:
+        flash('User not found')
+        return redirect(url_for('index'))
+    
+    # Get user stats
+    stats = c.execute('SELECT * FROM user_stats WHERE user_id = ?', (user_id,)).fetchone()
+    
+    # Get recent sessions created
+    recent_sessions = c.execute('''
+        SELECT * FROM sessions
+        WHERE creator_id = ?
+        ORDER BY created_at DESC
+        LIMIT 5
+    ''', (user_id,)).fetchall()
+    
+    # Get recent notes
+    recent_notes = c.execute('''
+        SELECT * FROM notes
+        WHERE user_id = ? AND is_public = 1
+        ORDER BY created_at DESC
+        LIMIT 5
+    ''', (user_id,)).fetchall()
+    
+    conn.close()
+    
+    is_own_profile = (user_id == session['user_id'])
+    
+    return render_template('profile.html', 
+                         user=user, 
+                         stats=stats,
+                         recent_sessions=recent_sessions,
+                         recent_notes=recent_notes,
+                         is_own_profile=is_own_profile)
+
+@app.route('/profile/edit', methods=['GET', 'POST'])
+@login_required
+def edit_profile():
+    """Edit user profile"""
+    if request.method == 'POST':
+        full_name = request.form.get('full_name', '').strip()
+        bio = request.form.get('bio', '').strip()
+        
+        if not full_name:
+            flash('Full name is required')
+            return redirect(url_for('edit_profile'))
+        
+        conn = get_db()
+        
+        # Handle avatar upload
+        avatar_filename = None
+        if 'avatar' in request.files:
+            file = request.files['avatar']
+            if file and file.filename and allowed_file(file.filename):
+                # Create avatars directory
+                avatar_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'avatars')
+                if not os.path.exists(avatar_dir):
+                    os.makedirs(avatar_dir)
+                
+                # Generate unique filename
+                filename = secure_filename(file.filename)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                avatar_filename = f"avatar_{session['user_id']}_{timestamp}_{filename}"
+                filepath = os.path.join(avatar_dir, avatar_filename)
+                
+                # Delete old avatar if exists
+                old_user = conn.execute('SELECT avatar_filename FROM users WHERE id = ?', 
+                                       (session['user_id'],)).fetchone()
+                if old_user and old_user['avatar_filename']:
+                    old_path = os.path.join(avatar_dir, old_user['avatar_filename'])
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                
+                file.save(filepath)
+                
+                # Update with avatar
+                conn.execute('''
+                    UPDATE users 
+                    SET full_name = ?, bio = ?, avatar_filename = ?
+                    WHERE id = ?
+                ''', (full_name, bio, avatar_filename, session['user_id']))
+            else:
+                # Update without avatar
+                conn.execute('''
+                    UPDATE users 
+                    SET full_name = ?, bio = ?
+                    WHERE id = ?
+                ''', (full_name, bio, session['user_id']))
+        else:
+            # Update without avatar
+            conn.execute('''
+                UPDATE users 
+                SET full_name = ?, bio = ?
+                WHERE id = ?
+            ''', (full_name, bio, session['user_id']))
+        
+        # Update session name
+        session['full_name'] = full_name
+        
+        conn.commit()
+        conn.close()
+        
+        flash('Profile updated successfully!')
+        return redirect(url_for('profile', user_id=session['user_id']))
+    
+    # GET - show form
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    conn.close()
+    
+    return render_template('edit_profile.html', user=user)
+
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    """User settings page"""
+    if request.method == 'POST':
+        conn = get_db()
+        
+        # Update settings
+        email_notifications = 1 if request.form.get('email_notifications') else 0
+        session_reminders = 1 if request.form.get('session_reminders') else 0
+        message_notifications = 1 if request.form.get('message_notifications') else 0
+        theme = request.form.get('theme', 'purple')
+        
+        conn.execute('''
+            UPDATE user_settings
+            SET email_notifications = ?,
+                session_reminders = ?,
+                message_notifications = ?,
+                theme = ?
+            WHERE user_id = ?
+        ''', (email_notifications, session_reminders, message_notifications, 
+              theme, session['user_id']))
+        
+        conn.commit()
+        conn.close()
+        
+        flash('Settings saved successfully!')
+        return redirect(url_for('settings'))
+    
+    # GET - show settings
+    conn = get_db()
+    user_settings = conn.execute('''
+        SELECT * FROM user_settings WHERE user_id = ?
+    ''', (session['user_id'],)).fetchone()
+    conn.close()
+    
+    return render_template('settings.html', settings=user_settings)
+
+@app.route('/uploads/avatars/<filename>')
+def serve_avatar(filename):
+    """Serve avatar images"""
+    return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'avatars'), filename)
+
+# ============================================
 # SESSION RECORDINGS ROUTES
 # ============================================
 
