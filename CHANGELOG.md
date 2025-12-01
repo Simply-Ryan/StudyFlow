@@ -8,9 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Session recording/transcription with Whisper API
-- Study analytics dashboard with Chart.js visualizations
-- Google Calendar and Outlook integration
 - Mobile-responsive design with PWA support
 - Global search with SQLite FTS5
 - Flashcard system with spaced repetition (SM-2)
@@ -106,6 +103,172 @@ This release represents a significant overhaul of the platform with three major 
 ### Dependencies
 - TinyMCE 6.x (CDN)
 - Socket.IO 4.5.4 (already in use, extended for notes and notifications)
+
+---
+
+## [1.10.0] - 2025-11-30
+
+### Added
+- **Study Analytics Dashboard**: Comprehensive dashboard with Chart.js visualizations
+- Total study hours tracking across all attended sessions
+- Session attendance counter and favorite subject identification
+- Study streak calculator showing consecutive days of study
+- **Four Interactive Charts**:
+  - Line chart: Study sessions over time (last 30 days)
+  - Doughnut chart: Study by subject breakdown
+  - Bar chart: Study hours by day of week
+  - Dual-axis bar chart: Monthly progress (sessions + hours, last 6 months)
+- Summary statistics cards with gradient icons
+- Recent activity feed showing last 5 attended sessions
+- Responsive grid layout optimized for desktop and mobile
+
+### Technical
+- New `/analytics` route with comprehensive data aggregation
+- Chart.js 4.4.0 integration via CDN
+- Analytics calculations from `sessions`, `rsvps`, and `users` tables
+- Day-of-week analysis (Monday-Sunday pattern)
+- Monthly aggregation with dual metrics
+- SQL queries optimized for large datasets
+- Streak calculation using consecutive date logic
+
+### UI/UX
+- 4 gradient stat cards with Font Awesome icons
+- Card hover effects (lift and shadow)
+- Chart containers with white background and shadows
+- Activity items with session type icons
+- Responsive grid adapting from 4-column to 1-column on mobile
+- Purple gradient theme consistency maintained
+
+### Dependencies
+- Chart.js 4.4.0 (CDN)
+- Inter font family
+- Font Awesome 6.5.1 (already in use)
+
+---
+
+## [1.11.0] - 2025-11-30
+
+### Added
+- **Calendar Integration**: Export study sessions to calendar applications
+- .ics file generation for universal calendar compatibility
+- **Google Calendar Integration**: Direct "Add to Google Calendar" button with deep linking
+- **Outlook Calendar Integration**: Direct "Add to Outlook Calendar" button with deep linking
+- Calendar dropdown menu with multiple export options
+- "Add to Calendar" buttons on session detail pages (for participants only)
+- Calendar export buttons on session cards in index page
+- Session metadata included in calendar events:
+  - Title, date, time, duration (default 2 hours)
+  - Subject, type, location (if in-person)
+  - Meeting link (if remote)
+  - Organizer name
+
+### Technical
+- New `/session/<id>/calendar.ics` route for .ics file download
+- `ics` library (0.7.2) for iCalendar format generation
+- JavaScript functions for Google/Outlook deep link generation
+- ISO 8601 datetime formatting for calendar APIs
+- Permission checks: Only participants and creators can export sessions
+- Calendar dropdown with click-outside-to-close functionality
+
+### UI/UX
+- Calendar buttons with gradient purple styling
+- Dropdown menu with Google/Outlook/Download options
+- Responsive calendar buttons (full-width on mobile)
+- Calendar option icons (Google, Microsoft, Download)
+- Hover effects and smooth transitions
+- Small calendar buttons on session cards in index
+
+### Dependencies
+- ics==0.7.2 (Python library for iCalendar generation)
+
+---
+
+## [1.12.0] - 2025-11-30
+
+### Added
+- **Mobile-Responsive Design**: Complete mobile optimization for all devices
+- **Hamburger Menu**: Animated 3-bar menu for mobile navigation
+- Slide-in mobile menu with smooth transitions
+- Touch-friendly navigation with full-width links
+- Mobile-optimized layouts for all pages and components
+- Responsive typography scaling (14-16px on mobile)
+- Single-column grid layouts on mobile (<768px)
+- Optimized form inputs (16px font to prevent iOS zoom)
+- Mobile-friendly modals and dropdowns
+- Landscape orientation optimizations
+- Print-friendly styles
+
+### Technical
+- CSS media queries for tablets (1024px), phones (768px), small phones (480px)
+- Hamburger menu JavaScript with click-outside-to-close
+- Flexbox-based mobile navigation layout
+- Fixed positioning for mobile menu overlay
+- Viewport-aware font sizing
+- Touch target optimization (44px minimum)
+- Menu state management with body class toggling
+- Auto-close menu on link click
+
+### UI/UX Improvements
+- **Navbar**: Hamburger menu button, slide-in drawer navigation
+- **Session Cards**: Single column layout, full-width buttons
+- **Forms**: Stacked inputs, larger touch targets
+- **Charts**: Reduced height for mobile (220-250px)
+- **Modals**: 95% width, 90vh max height on mobile
+- **Tables**: Responsive participant lists, single column
+- **Buttons**: Full-width on mobile where appropriate
+- **Typography**: Scaled down headings (h1: 1.75rem on mobile)
+- **Spacing**: Reduced padding/margins for smaller screens
+- **File Grid**: Single column file cards
+- **Analytics**: Mobile-optimized stat cards and charts
+- **Chat**: Reduced message container height (400px)
+- **Recordings**: Stacked recording actions on mobile
+- **TinyMCE**: Minimum 300px height on mobile
+
+### Accessibility
+- Proper ARIA labels on hamburger button
+- Semantic HTML for mobile menu
+- Keyboard navigation support
+- Focus management for menu interactions
+- Print styles for document export
+
+### Performance
+- CSS-only animations (no JavaScript lag)
+- Optimized media query breakpoints
+- Minimal JavaScript for menu toggle
+- No additional HTTP requests
+
+---
+
+## [1.9.0] - 2025-11-30
+
+### Added
+- **Session Recording and Transcription**: Upload, manage, and transcribe audio/video recordings
+- Support for 8 audio/video formats (mp3, wav, ogg, m4a, webm, mp4, avi, mov)
+- Manual transcription with inline editing forms
+- Recording list with file details (uploader, date, duration, file size)
+- Download recordings (participants only)
+- Delete recordings (uploader or session creator only)
+- Recording type detection (audio vs video)
+- Visual icons for audio and video files
+
+### Technical
+- New `session_recordings` table with foreign keys to sessions and users
+- Four recording management routes:
+  - POST `/session/<id>/upload-recording`: Upload audio/video files
+  - GET `/recording/<id>/download`: Download recordings (participants only)
+  - POST `/recording/<id>/delete`: Delete recordings (uploader/creator only)
+  - POST `/recording/<id>/transcription`: Add/update transcriptions
+- File validation and secure filename handling
+- Permission-based access control for downloads and deletions
+- Migration script (`migrate_recordings.py`) for database updates
+
+### UI/UX
+- Recordings section in session detail page
+- Upload form with file input and optional transcription field
+- Recording cards with gradient backgrounds
+- Inline transcription editing with show/cancel/save actions
+- JavaScript functions for transcription management
+- Responsive design for mobile devices
 
 ---
 

@@ -68,7 +68,30 @@
     {% endif %}
 
     <div class="rsvp-section">
-        <h2>RSVP to this Session</h2>
+        <div class="section-header-with-actions">
+            <h2>RSVP to this Session</h2>
+            {% if user_has_rsvp or is_creator %}
+                <div class="calendar-buttons">
+                    <a href="{{ url_for('export_to_calendar', session_id=study_session.id) }}" class="btn-calendar">
+                        <i class="fas fa-calendar-plus"></i> Download .ics
+                    </a>
+                    <button class="btn-calendar" onclick="showCalendarOptions({{ study_session.id }})">
+                        <i class="fas fa-calendar-alt"></i> Add to Calendar <i class="fas fa-chevron-down" style="font-size: 0.8rem;"></i>
+                    </button>
+                    <div class="calendar-dropdown" id="calendarDropdown-{{ study_session.id }}" style="display: none;">
+                        <a href="#" onclick="addToGoogleCalendar(event); return false;" class="calendar-option">
+                            <i class="fab fa-google"></i> Google Calendar
+                        </a>
+                        <a href="#" onclick="addToOutlook(event); return false;" class="calendar-option">
+                            <i class="fab fa-microsoft"></i> Outlook Calendar
+                        </a>
+                        <a href="{{ url_for('export_to_calendar', session_id=study_session.id) }}" class="calendar-option">
+                            <i class="fas fa-download"></i> Download .ics file
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
         
         <div class="capacity-indicator">
             <div class="capacity-text">
@@ -173,7 +196,7 @@
                             <div class="file-message-content">
                                 <div class="file-preview-thumb">
                                     {% if item.file_type in ['jpg', 'jpeg', 'png', 'gif', 'webp'] %}
-                                        <img src="{{ url_for('file_preview', file_id=item.file_id) }}" alt="{{ item.original_filename }}" onclick="openFullPreview({{ item.file_id }})">
+                                        <img src="{{ url_for('preview_file', file_id=item.file_id) }}" alt="{{ item.original_filename }}" onclick="openFullPreview({{ item.file_id }})">
                                     {% elif item.file_type == 'pdf' %}
                                         <i class="fas fa-file-pdf file-icon pdf-icon"></i>
                                     {% elif item.file_type in ['doc', 'docx'] %}
@@ -191,7 +214,7 @@
                                     <div class="file-size">{{ (item.file_size / 1024)|round(1) }} KB</div>
                                     <div class="file-actions">
                                         {% if item.file_type in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'] %}
-                                            <a href="{{ url_for('file_preview', file_id=item.file_id) }}" target="_blank" class="file-action-link">
+                                            <a href="{{ url_for('preview_file', file_id=item.file_id) }}" target="_blank" class="file-action-link">
                                                 <i class="fas fa-eye"></i> View
                                             </a>
                                         {% endif %}
@@ -845,6 +868,89 @@
         {% endif %}
     </div>
 
+    <!-- Session Recordings Section -->
+    <div class="recordings-section">
+        <h2><i class="fas fa-microphone"></i> Session Recordings</h2>
+        
+        {% if recordings %}
+            <div class="recordings-list">
+                {% for recording in recordings %}
+                    <div class="recording-item">
+                        <div class="recording-header">
+                            <div class="recording-info">
+                                <i class="fas fa-{% if recording.recording_type == 'video' %}video{% else %}music{% endif %} recording-icon"></i>
+                                <div class="recording-details">
+                                    <h4>{{ recording.original_filename }}</h4>
+                                    <small>
+                                        Uploaded by {{ recording.full_name }} • 
+                                        {{ recording.created_at[:10] }} •
+                                        {% if recording.duration %}{{ recording.duration // 60 }}:{{ '%02d' % (recording.duration % 60) }}{% else %}Unknown duration{% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="recording-actions">
+                                <a href="{{ url_for('download_recording', recording_id=recording.id) }}" class="btn-primary btn-small">
+                                    <i class="fas fa-download"></i> Download
+                                </a>
+                                {% if session.user_id == recording.user_id or is_creator %}
+                                    <form method="POST" action="{{ url_for('delete_recording', recording_id=recording.id) }}" style="display: inline;" onsubmit="return confirm('Delete this recording?');">
+                                        <button type="submit" class="btn-danger btn-small">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if recording.transcription %}
+                            <div class="recording-transcription">
+                                <h5><i class="fas fa-file-alt"></i> Transcription</h5>
+                                <p>{{ recording.transcription }}</p>
+                            </div>
+                        {% else %}
+                            {% if session.user_id == recording.user_id or is_creator %}
+                                <div class="add-transcription">
+                                    <button onclick="showTranscriptionForm({{ recording.id }})" class="btn-secondary btn-small">
+                                        <i class="fas fa-plus"></i> Add Transcription
+                                    </button>
+                                    <div id="transcriptionForm{{ recording.id }}" style="display: none; margin-top: 1rem;">
+                                        <textarea id="transcriptionText{{ recording.id }}" class="transcription-textarea" rows="4" placeholder="Enter transcription..."></textarea>
+                                        <button onclick="saveTranscription({{ recording.id }})" class="btn-primary btn-small">
+                                            <i class="fas fa-save"></i> Save
+                                        </button>
+                                        <button onclick="cancelTranscription({{ recording.id }})" class="btn-secondary btn-small">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="empty-state">No recordings yet. Upload a session recording to get started!</p>
+        {% endif %}
+
+        {% if 'user_id' in session and user_has_rsvp %}
+            <form method="POST" action="{{ url_for('upload_recording', session_id=study_session.id) }}" enctype="multipart/form-data" class="upload-form">
+                <div class="form-group">
+                    <label for="recording">Upload Recording</label>
+                    <input type="file" name="recording" id="recording" required class="file-input" accept="audio/*,video/*,.mp3,.wav,.ogg,.webm,.mp4,.avi,.mov,.m4a">
+                    <small class="help-text">Accepted: Audio (MP3, WAV, OGG, M4A), Video (MP4, AVI, MOV, WEBM). Max size: 100MB</small>
+                </div>
+                <div class="form-group">
+                    <label for="transcription">Transcription (Optional)</label>
+                    <textarea name="transcription" id="transcription" rows="4" class="transcription-textarea" placeholder="Add transcription text (can be added later)..."></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Upload Recording</button>
+            </form>
+        {% elif 'user_id' in session %}
+            <p class="info-message">Please RSVP to this session to upload recordings.</p>
+        {% else %}
+            <p class="info-message">Please <a href="{{ url_for('login') }}">login</a> to upload recordings.</p>
+        {% endif %}
+    </div>
+
     <script>
     // real-time file updates
     (function() {
@@ -1278,6 +1384,114 @@
         <div id="previewContent" class="preview-modal-content"></div>
         <div id="previewActions" class="preview-modal-actions"></div>
     </div>
+
+    <script>
+    // Recording transcription management
+    function showTranscriptionForm(recordingId) {
+        document.getElementById(`transcriptionForm${recordingId}`).style.display = 'block';
+    }
+
+    function cancelTranscription(recordingId) {
+        document.getElementById(`transcriptionForm${recordingId}`).style.display = 'none';
+        document.getElementById(`transcriptionText${recordingId}`).value = '';
+    }
+
+    function saveTranscription(recordingId) {
+        const text = document.getElementById(`transcriptionText${recordingId}`).value;
+        
+        if (!text.trim()) {
+            alert('Please enter transcription text');
+            return;
+        }
+
+        fetch(`/recording/${recordingId}/transcription`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ transcription: text })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Transcription saved successfully!');
+                location.reload(); // Reload to show the transcription
+            } else {
+                alert('Error saving transcription');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error saving transcription');
+        });
+    }
+
+    // Calendar integration functions
+    function showCalendarOptions(sessionId) {
+        const dropdown = document.getElementById('calendarDropdown-' + sessionId);
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function addToGoogleCalendar(event) {
+        event.preventDefault();
+        const sessionDate = '{{ study_session.session_date }}';
+        const title = '{{ study_session.title }}';
+        const location = '{{ study_session.location or "" }}';
+        const meetingLink = '{{ study_session.meeting_link or "" }}';
+        const subject = '{{ study_session.subject }}';
+        
+        // Parse date and format for Google Calendar
+        const dateObj = new Date(sessionDate.replace(' ', 'T'));
+        const endDate = new Date(dateObj.getTime() + (2 * 60 * 60 * 1000)); // +2 hours
+        
+        const startTime = dateObj.toISOString().replace(/-|:|\.\d\d\d/g, '');
+        const endTime = endDate.toISOString().replace(/-|:|\.\d\d\d/g, '');
+        
+        let description = `Subject: ${subject}`;
+        if (meetingLink) {
+            description += `\nMeeting Link: ${meetingLink}`;
+        }
+        
+        const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startTime}/${endTime}&details=${encodeURIComponent(description)}&location=${encodeURIComponent(location || '')}`;
+        
+        window.open(googleUrl, '_blank');
+    }
+
+    function addToOutlook(event) {
+        event.preventDefault();
+        const sessionDate = '{{ study_session.session_date }}';
+        const title = '{{ study_session.title }}';
+        const location = '{{ study_session.location or "" }}';
+        const meetingLink = '{{ study_session.meeting_link or "" }}';
+        const subject = '{{ study_session.subject }}';
+        
+        // Parse date and format for Outlook
+        const dateObj = new Date(sessionDate.replace(' ', 'T'));
+        const endDate = new Date(dateObj.getTime() + (2 * 60 * 60 * 1000));
+        
+        const startTime = dateObj.toISOString();
+        const endTime = endDate.toISOString();
+        
+        let description = `Subject: ${subject}`;
+        if (meetingLink) {
+            description += `\nMeeting Link: ${meetingLink}`;
+        }
+        
+        const outlookUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${startTime}&enddt=${endTime}&body=${encodeURIComponent(description)}&location=${encodeURIComponent(location || '')}`;
+        
+        window.open(outlookUrl, '_blank');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        const calendarDropdowns = document.querySelectorAll('.calendar-dropdown');
+        calendarDropdowns.forEach(dropdown => {
+            if (!dropdown.parentElement.contains(event.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
+    </script>
 
     {% if is_creator %}
     <div class="creator-actions">

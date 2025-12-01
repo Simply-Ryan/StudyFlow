@@ -113,7 +113,15 @@
                         <p>📍 {{ session.location }}</p>
                     {% endif %}
                 </div>
-                <a href="{{ url_for('detail', session_id=session.id) }}" class="btn-secondary">View Details</a>
+                
+                <div class="session-card-footer">
+                    <a href="{{ url_for('detail', session_id=session.id) }}" class="btn-secondary">View Details</a>
+                    {% if session.user_is_participant %}
+                        <a href="{{ url_for('export_to_calendar', session_id=session.id) }}" class="btn-calendar-small" title="Add to Calendar">
+                            <i class="fas fa-calendar-plus"></i> Calendar
+                        </a>
+                    {% endif %}
+                </div>
             </div>
             {% endfor %}
         </div>

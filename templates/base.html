@@ -15,11 +15,26 @@
     <nav class="navbar">
         <div class="container">
             <a href="{{ url_for('index') }}" class="logo">StudyFlow - Learning Together</a>
-            <div class="nav-links">
+            
+            {% if session.user_id %}
+            <div class="search-container">
+                <input type="text" id="globalSearch" class="search-input" placeholder="Search sessions, notes, files..." autocomplete="off">
+                <i class="fas fa-search search-icon"></i>
+                <div class="search-results" id="searchResults"></div>
+            </div>
+            {% endif %}
+            
+            <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <div class="nav-links" id="navLinks">
                 {% if session.user_id %}
                     <span class="user-greeting">Hello, {{ session.full_name }}!</span>
                     <a href="{{ url_for('index') }}">Sessions</a>
                     <a href="{{ url_for('notes') }}">Notes</a>
+                    <a href="{{ url_for('analytics') }}">Analytics</a>
                     <div class="notification-bell" id="notificationBell">
                         <i class="fas fa-bell"></i>
                         <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
@@ -234,5 +249,161 @@
     })();
     </script>
     {% endif %}
+    
+    <!-- Global Search Script -->
+    <script>
+        const globalSearch = document.getElementById('globalSearch');
+        const searchResults = document.getElementById('searchResults');
+        let searchTimeout;
+        
+        if (globalSearch) {
+            globalSearch.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                const query = this.value.trim();
+                
+                if (query.length < 2) {
+                    searchResults.innerHTML = '';
+                    searchResults.style.display = 'none';
+                    return;
+                }
+                
+                searchTimeout = setTimeout(() => {
+                    fetch(`/api/search?q=${encodeURIComponent(query)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            displaySearchResults(data);
+                        })
+                        .catch(error => {
+                            console.error('Search error:', error);
+                        });
+                }, 300);
+            });
+            
+            // Close search results when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!globalSearch.contains(event.target) && !searchResults.contains(event.target)) {
+                    searchResults.style.display = 'none';
+                }
+            });
+            
+            // Show results when focusing on search input
+            globalSearch.addEventListener('focus', function() {
+                if (searchResults.innerHTML) {
+                    searchResults.style.display = 'block';
+                }
+            });
+        }
+        
+        function displaySearchResults(data) {
+            if (data.total === 0) {
+                searchResults.innerHTML = '<div class="search-no-results">No results found</div>';
+                searchResults.style.display = 'block';
+                return;
+            }
+            
+            let html = `<div class="search-header">Found ${data.total} result${data.total !== 1 ? 's' : ''}</div>`;
+            
+            // Sessions
+            if (data.results.sessions.length > 0) {
+                html += '<div class="search-category">Sessions</div>';
+                data.results.sessions.forEach(item => {
+                    html += `
+                        <a href="/session/${item.id}" class="search-result-item">
+                            <div class="search-result-icon"><i class="fas fa-book"></i></div>
+                            <div class="search-result-content">
+                                <div class="search-result-title">${item.title_snippet}</div>
+                                <div class="search-result-meta">${item.subject} • ${item.creator_name}</div>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+            
+            // Notes
+            if (data.results.notes.length > 0) {
+                html += '<div class="search-category">Notes</div>';
+                data.results.notes.forEach(item => {
+                    html += `
+                        <a href="/note/${item.id}" class="search-result-item">
+                            <div class="search-result-icon"><i class="fas fa-sticky-note"></i></div>
+                            <div class="search-result-content">
+                                <div class="search-result-title">${item.title_snippet || item.title}</div>
+                                <div class="search-result-snippet">${item.content_snippet || ''}</div>
+                                <div class="search-result-meta">${item.subject} • ${item.author_name}</div>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+            
+            // Messages
+            if (data.results.messages.length > 0) {
+                html += '<div class="search-category">Messages</div>';
+                data.results.messages.forEach(item => {
+                    html += `
+                        <a href="/session/${item.session_id}" class="search-result-item">
+                            <div class="search-result-icon"><i class="fas fa-comment"></i></div>
+                            <div class="search-result-content">
+                                <div class="search-result-snippet">${item.message_snippet}</div>
+                                <div class="search-result-meta">${item.session_title} • ${item.author_name}</div>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+            
+            // Files
+            if (data.results.files.length > 0) {
+                html += '<div class="search-category">Files</div>';
+                data.results.files.forEach(item => {
+                    html += `
+                        <a href="/session/${item.session_id}" class="search-result-item">
+                            <div class="search-result-icon"><i class="fas fa-file"></i></div>
+                            <div class="search-result-content">
+                                <div class="search-result-title">${item.filename_snippet || item.original_filename}</div>
+                                <div class="search-result-meta">${item.session_title} • ${item.uploader_name}</div>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+            
+            searchResults.innerHTML = html;
+            searchResults.style.display = 'block';
+        }
+    </script>
+    
+    <!-- Hamburger Menu Script -->
+    <script>
+        const hamburger = document.getElementById('hamburger');
+        const navLinks = document.getElementById('navLinks');
+        
+        if (hamburger) {
+            hamburger.addEventListener('click', function() {
+                hamburger.classList.toggle('active');
+                navLinks.classList.toggle('active');
+                document.body.classList.toggle('menu-open');
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!hamburger.contains(event.target) && !navLinks.contains(event.target)) {
+                    hamburger.classList.remove('active');
+                    navLinks.classList.remove('active');
+                    document.body.classList.remove('menu-open');
+                }
+            });
+            
+            // Close menu when clicking on a link
+            const navLinkItems = navLinks.querySelectorAll('a');
+            navLinkItems.forEach(link => {
+                link.addEventListener('click', function() {
+                    hamburger.classList.remove('active');
+                    navLinks.classList.remove('active');
+                    document.body.classList.remove('menu-open');
+                });
+            });
+        }
+    </script>
 </body>
 </html>

@@ -47,6 +47,34 @@ A collaborative study session management web application built for **HackDécouv
 - **Download & Delete**: Quick actions on all files
 - **File Context**: Separate chat files from study materials
 
+### 🎙️ Session Recordings
+- **Audio/Video Upload**: Upload session recordings (8 formats supported)
+- **Manual Transcriptions**: Add and edit transcriptions for recordings
+- **Permission Control**: Only participants can download, creators can delete
+- **File Management**: View recording details (uploader, date, duration, size)
+
+### 📊 Study Analytics
+- **Analytics Dashboard**: Comprehensive dashboard with Chart.js visualizations
+- **Study Time Tracking**: Total hours across all attended sessions
+- **Session Statistics**: Attendance count, favorite subject, study streak
+- **Visual Charts**: Line, doughnut, and bar charts for data insights
+- **Time Patterns**: Daily, weekly, and monthly study patterns
+- **Recent Activity**: Feed of last 5 attended sessions
+
+### 🔍 Global Search
+- **FTS5 Full-Text Search**: Lightning-fast search powered by SQLite FTS5
+- **Multi-Category Search**: Search across sessions, messages, notes, and files
+- **Live Results**: Real-time search dropdown with instant results
+- **Smart Highlighting**: Search terms highlighted in result snippets
+- **Permission-Aware**: Only shows content you have access to
+- **Ranked Results**: Most relevant results appear first
+
+### 📅 Calendar Integration
+- **Add to Calendar**: Export sessions to Google Calendar, Outlook, or .ics file
+- **One-Click Sync**: Direct integration with Google and Outlook calendars
+- **Universal .ics Export**: Download calendar files compatible with any calendar app
+- **Smart Metadata**: Automatically includes location, meeting links, and session details
+
 ### ⏰ Productivity Features
 - **Automatic Reminders**: Email notifications 24 hours before sessions
 - **Countdown Timer**: See how much time until your session
@@ -56,8 +84,10 @@ A collaborative study session management web application built for **HackDécouv
 ### 🎨 Modern Design
 - **Purple Gradient Theme**: Beautiful color scheme throughout
 - **Glass Morphism**: Frosted glass effects with backdrop blur
-- **Responsive Layout**: Works perfectly on mobile, tablet, and desktop
-- **Horizontal Cards**: Clean 4-per-row layout for study materials
+- **Fully Responsive**: Optimized for mobile, tablet, and desktop devices
+- **Hamburger Menu**: Smooth slide-in navigation for mobile devices
+- **Touch-Optimized**: Large touch targets and mobile-friendly interactions
+- **Horizontal Cards**: Clean 4-per-row layout for study materials (1-column on mobile)
 - **Smooth Animations**: Polished transitions and hover effects
 
 ## 🚀 Quick Start
@@ -104,8 +134,14 @@ Visit `http://127.0.0.1:5000` and create your account!
 - **JavaScript (ES6+)** - Real-time updates and interactivity
 - **[Socket.IO 4.5.4](https://socket.io/)** - WebSocket client for real-time communication
 - **[TinyMCE 6](https://www.tiny.cloud/)** - Rich text editor for notes
-- **[Font Awesome 6.5](https://fontawesome.com/)** - Icon library
+- **[Chart.js 4.4.0](https://www.chartjs.org/)** - Data visualization for analytics
+- **[Font Awesome 6.5](https://fontawesome.com/)** - Icon library (including brand icons)
 - **[Google Fonts (Inter)](https://fonts.google.com/)** - Typography
+
+### Calendar Integration
+- **[ics 0.7.2](https://pypi.org/project/ics/)** - iCalendar file generation
+- **Google Calendar API** - Deep linking for direct calendar integration
+- **Outlook Calendar API** - Deep linking for Outlook.com integration
 
 ### Development Tools
 - **Git & GitHub** - Version control

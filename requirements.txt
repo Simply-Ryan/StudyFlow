@@ -76,3 +76,4 @@ WTForms==3.2.1
 yarg==0.1.10
 Flask-SocketIO==5.3.6
 python-socketio==5.11.0
+ics==0.7.2

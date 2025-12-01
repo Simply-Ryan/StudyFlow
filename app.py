@@ -1,6 +1,6 @@
 # Main app redirection file. MESSY SO WATCH OUT
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify, make_response
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
 import os
@@ -9,6 +9,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from functools import wraps
 from apscheduler.schedulers.background import BackgroundScheduler
+from ics import Calendar, Event
 import atexit
 
 app = Flask(__name__)
@@ -150,6 +151,18 @@ def index():
     
     sessions_query = conn.execute(query, params).fetchall()
     
+    # Convert to list of dicts and add participant info
+    sessions = []
+    for sess in sessions_query:
+        sess_dict = dict(sess)
+        sess_dict['user_is_participant'] = False
+        if 'user_id' in session:
+            # Check if user is participant
+            rsvp = conn.execute('SELECT * FROM rsvps WHERE session_id = ? AND user_id = ?',
+                              (sess['id'], session['user_id'])).fetchone()
+            sess_dict['user_is_participant'] = (rsvp is not None or sess['creator_id'] == session['user_id'])
+        sessions.append(sess_dict)
+    
     # fetch user invitations if they're logged in
     invitations = []
     reminders = []
@@ -180,7 +193,7 @@ def index():
         ''', (session['user_id'], session['user_id'])).fetchall()
     
     conn.close()
-    return render_template('index.html', sessions=sessions_query, invitations=invitations, reminders=reminders)
+    return render_template('index.html', sessions=sessions, invitations=invitations, reminders=reminders)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -412,6 +425,15 @@ def detail(session_id):
             ORDER BY full_name
         ''', excluded_ids).fetchall()
     
+    # Fetch session recordings
+    recordings = conn.execute('''
+        SELECT r.*, u.full_name, u.username
+        FROM session_recordings r
+        JOIN users u ON r.user_id = u.id
+        WHERE r.session_id = ?
+        ORDER BY r.created_at DESC
+    ''', (session_id,)).fetchall()
+    
     conn.close()
     
     # calculate spots remaining
@@ -430,7 +452,7 @@ def detail(session_id):
     return render_template('detail.html', study_session=study_session, rsvps=rsvps, messages=messages,
                          current_count=current_count, max_participants=max_participants,
                          is_full=is_full, spots_left=spots_left, user_has_rsvp=user_has_rsvp,
-                         is_creator=is_creator, all_users=all_users, files=files)
+                         is_creator=is_creator, all_users=all_users, files=files, recordings=recordings)
 
 @app.route('/session/<int:session_id>/message', methods=['POST'])
 @login_required
@@ -1020,6 +1042,523 @@ def delete_file(file_id):
     
     conn.close()
     return redirect(url_for('detail', session_id=session_id))
+
+# ============================================
+# ANALYTICS DASHBOARD
+# ============================================
+
+@app.route('/analytics')
+@login_required
+def analytics():
+    """Display study analytics dashboard"""
+    user_id = session['user_id']
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    # Get sessions user has attended
+    c.execute('''
+        SELECT s.*, u.username as creator_name
+        FROM sessions s
+        JOIN rsvps r ON s.id = r.session_id
+        JOIN users u ON s.creator_id = u.id
+        WHERE r.user_id = ?
+        ORDER BY s.session_date DESC
+    ''', (user_id,))
+    attended_sessions = c.fetchall()
+    
+    # Calculate total hours (assuming 2 hours per session if not specified)
+    total_hours = sum([2 for _ in attended_sessions])
+    
+    # Count total sessions
+    total_sessions = len(attended_sessions)
+    
+    # Get subject breakdown
+    c.execute('''
+        SELECT s.subject, COUNT(*) as count
+        FROM sessions s
+        JOIN rsvps r ON s.id = r.session_id
+        WHERE r.user_id = ?
+        GROUP BY s.subject
+        ORDER BY count DESC
+    ''', (user_id,))
+    subject_data = c.fetchall()
+    subject_labels = [row['subject'] for row in subject_data]
+    subject_counts = [row['count'] for row in subject_data]
+    favorite_subject = subject_labels[0] if subject_labels else 'N/A'
+    
+    # Calculate current streak (consecutive days with sessions)
+    c.execute('''
+        SELECT DISTINCT DATE(s.session_date) as session_date
+        FROM sessions s
+        JOIN rsvps r ON s.id = r.session_id
+        WHERE r.user_id = ?
+        ORDER BY session_date DESC
+    ''', (user_id,))
+    session_dates = [row['session_date'] for row in c.fetchall()]
+    
+    current_streak = 0
+    if session_dates:
+        current_date = datetime.now().date()
+        for date_str in session_dates:
+            session_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            if (current_date - session_date).days == current_streak:
+                current_streak += 1
+            else:
+                break
+    
+    # Sessions over time (last 30 days)
+    c.execute('''
+        SELECT DATE(s.session_date) as session_date, COUNT(*) as count
+        FROM sessions s
+        JOIN rsvps r ON s.id = r.session_id
+        WHERE r.user_id = ?
+        AND DATE(s.session_date) >= DATE('now', '-30 days')
+        GROUP BY session_date
+        ORDER BY session_date
+    ''', (user_id,))
+    timeline_data = c.fetchall()
+    sessions_dates = [row['session_date'] for row in timeline_data]
+    sessions_counts = [row['count'] for row in timeline_data]
+    
+    # Day of week analysis
+    day_of_week_hours = [0, 0, 0, 0, 0, 0, 0]  # Mon-Sun
+    for sess in attended_sessions:
+        session_date = datetime.strptime(sess['session_date'], '%Y-%m-%d %H:%M')
+        day_index = session_date.weekday()  # 0=Monday, 6=Sunday
+        day_of_week_hours[day_index] += 2  # 2 hours per session
+    
+    # Monthly progress (last 6 months)
+    c.execute('''
+        SELECT strftime('%Y-%m', s.session_date) as month, 
+               COUNT(*) as session_count,
+               COUNT(*) * 2 as hours
+        FROM sessions s
+        JOIN rsvps r ON s.id = r.session_id
+        WHERE r.user_id = ?
+        AND DATE(s.session_date) >= DATE('now', '-6 months')
+        GROUP BY month
+        ORDER BY month
+    ''', (user_id,))
+    monthly_data = c.fetchall()
+    monthly_labels = [datetime.strptime(row['month'], '%Y-%m').strftime('%B') for row in monthly_data]
+    monthly_sessions = [row['session_count'] for row in monthly_data]
+    monthly_hours = [row['hours'] for row in monthly_data]
+    
+    # Recent sessions for activity feed
+    recent_sessions = []
+    for sess in attended_sessions[:5]:  # Last 5 sessions
+        session_date = datetime.strptime(sess['session_date'], '%Y-%m-%d %H:%M')
+        recent_sessions.append({
+            'id': sess['id'],
+            'title': sess['title'],
+            'subject': sess['subject'],
+            'type': sess['session_type'],
+            'date': session_date.strftime('%b %d, %Y'),
+            'duration': 2
+        })
+    
+    conn.close()
+    
+    return render_template('analytics.html',
+                         total_hours=total_hours,
+                         total_sessions=total_sessions,
+                         favorite_subject=favorite_subject,
+                         current_streak=current_streak,
+                         subject_labels=subject_labels,
+                         subject_counts=subject_counts,
+                         sessions_dates=sessions_dates,
+                         sessions_counts=sessions_counts,
+                         day_of_week_hours=day_of_week_hours,
+                         monthly_labels=monthly_labels,
+                         monthly_sessions=monthly_sessions,
+                         monthly_hours=monthly_hours,
+                         recent_sessions=recent_sessions)
+
+# ============================================
+# CALENDAR INTEGRATION
+# ============================================
+
+@app.route('/session/<int:session_id>/calendar.ics')
+@login_required
+def export_to_calendar(session_id):
+    """Export session to .ics calendar file"""
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    # Get session details
+    c.execute('SELECT * FROM sessions WHERE id = ?', (session_id,))
+    sess = c.fetchone()
+    
+    if not sess:
+        conn.close()
+        flash('Session not found.')
+        return redirect(url_for('index'))
+    
+    # Check if user is participant
+    c.execute('SELECT * FROM rsvps WHERE session_id = ? AND user_id = ?', 
+              (session_id, session['user_id']))
+    rsvp = c.fetchone()
+    
+    if not rsvp and sess['creator_id'] != session['user_id']:
+        conn.close()
+        flash('You must be a participant to export this session.')
+        return redirect(url_for('detail', session_id=session_id))
+    
+    # Get creator name
+    c.execute('SELECT full_name FROM users WHERE id = ?', (sess['creator_id'],))
+    creator = c.fetchone()
+    conn.close()
+    
+    # Create calendar and event
+    cal = Calendar()
+    event = Event()
+    
+    # Parse session datetime
+    session_datetime = datetime.strptime(sess['session_date'], '%Y-%m-%d %H:%M')
+    
+    # Set event details
+    event.name = sess['title']
+    event.begin = session_datetime
+    event.duration = timedelta(hours=2)  # Default 2 hours
+    
+    # Build description
+    description_parts = [
+        f"Subject: {sess['subject']}",
+        f"Type: {sess['session_type']}",
+        f"Organized by: {creator['full_name']}"
+    ]
+    
+    if sess['location']:
+        description_parts.append(f"Location: {sess['location']}")
+        event.location = sess['location']
+    
+    if sess['meeting_link']:
+        description_parts.append(f"Meeting Link: {sess['meeting_link']}")
+    
+    event.description = "\n".join(description_parts)
+    
+    # Add event to calendar
+    cal.events.add(event)
+    
+    # Create response with .ics file
+    response = make_response(str(cal))
+    response.headers['Content-Type'] = 'text/calendar; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename="study_session_{session_id}.ics"'
+    
+    return response
+
+# ============================================
+# SEARCH FUNCTIONALITY
+# ============================================
+
+@app.route('/api/search')
+@login_required
+def search():
+    """Global search across sessions, messages, notes, and files using FTS5"""
+    query = request.args.get('q', '').strip()
+    
+    if not query or len(query) < 2:
+        return jsonify({'results': []})
+    
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    results = {
+        'sessions': [],
+        'messages': [],
+        'notes': [],
+        'files': []
+    }
+    
+    # Search sessions
+    try:
+        c.execute('''
+            SELECT s.*, u.full_name as creator_name, 
+                   snippet(sessions_fts, 0, '<mark>', '</mark>', '...', 50) as title_snippet
+            FROM sessions_fts
+            JOIN sessions s ON sessions_fts.rowid = s.id
+            JOIN users u ON s.creator_id = u.id
+            WHERE sessions_fts MATCH ?
+            ORDER BY rank
+            LIMIT 10
+        ''', (query,))
+        
+        for row in c.fetchall():
+            results['sessions'].append({
+                'id': row['id'],
+                'title': row['title'],
+                'title_snippet': row['title_snippet'],
+                'subject': row['subject'],
+                'session_date': row['session_date'],
+                'creator_name': row['creator_name'],
+                'type': 'session'
+            })
+    except sqlite3.OperationalError:
+        pass  # FTS query syntax error, skip
+    
+    # Search messages (only in sessions user has access to)
+    try:
+        c.execute('''
+            SELECT m.*, s.title as session_title, u.full_name as author_name,
+                   snippet(messages_fts, 0, '<mark>', '</mark>', '...', 100) as message_snippet
+            FROM messages_fts
+            JOIN messages m ON messages_fts.rowid = m.id
+            JOIN sessions s ON m.session_id = s.id
+            JOIN users u ON m.user_id = u.id
+            WHERE messages_fts MATCH ?
+            AND (s.creator_id = ? OR m.session_id IN (
+                SELECT session_id FROM rsvps WHERE user_id = ?
+            ))
+            ORDER BY rank
+            LIMIT 10
+        ''', (query, session['user_id'], session['user_id']))
+        
+        for row in c.fetchall():
+            results['messages'].append({
+                'id': row['id'],
+                'session_id': row['session_id'],
+                'session_title': row['session_title'],
+                'author_name': row['author_name'],
+                'message_snippet': row['message_snippet'],
+                'created_at': row['created_at'],
+                'type': 'message'
+            })
+    except sqlite3.OperationalError:
+        pass
+    
+    # Search notes (only public notes or user's own notes)
+    try:
+        c.execute('''
+            SELECT n.*, u.full_name as author_name,
+                   snippet(notes_fts, 0, '<mark>', '</mark>', '...', 100) as title_snippet,
+                   snippet(notes_fts, 1, '<mark>', '</mark>', '...', 150) as content_snippet
+            FROM notes_fts
+            JOIN notes n ON notes_fts.rowid = n.id
+            JOIN users u ON n.user_id = u.id
+            WHERE notes_fts MATCH ?
+            AND (n.is_public = 1 OR n.user_id = ?)
+            ORDER BY rank
+            LIMIT 10
+        ''', (query, session['user_id']))
+        
+        for row in c.fetchall():
+            results['notes'].append({
+                'id': row['id'],
+                'title': row['title'],
+                'title_snippet': row['title_snippet'],
+                'content_snippet': row['content_snippet'],
+                'author_name': row['author_name'],
+                'subject': row['subject'],
+                'is_public': row['is_public'],
+                'type': 'note'
+            })
+    except sqlite3.OperationalError:
+        pass
+    
+    # Search files (only in sessions user has access to)
+    try:
+        c.execute('''
+            SELECT f.*, s.title as session_title, u.full_name as uploader_name,
+                   snippet(files_fts, 0, '<mark>', '</mark>', '...', 50) as filename_snippet
+            FROM files_fts
+            JOIN files f ON files_fts.rowid = f.id
+            JOIN sessions s ON f.session_id = s.id
+            JOIN users u ON f.user_id = u.id
+            WHERE files_fts MATCH ?
+            AND (s.creator_id = ? OR f.session_id IN (
+                SELECT session_id FROM rsvps WHERE user_id = ?
+            ))
+            ORDER BY rank
+            LIMIT 10
+        ''', (query, session['user_id'], session['user_id']))
+        
+        for row in c.fetchall():
+            results['files'].append({
+                'id': row['id'],
+                'session_id': row['session_id'],
+                'session_title': row['session_title'],
+                'original_filename': row['original_filename'],
+                'filename_snippet': row['filename_snippet'],
+                'file_type': row['file_type'],
+                'uploader_name': row['uploader_name'],
+                'uploaded_at': row['uploaded_at'],
+                'type': 'file'
+            })
+    except sqlite3.OperationalError:
+        pass
+    
+    conn.close()
+    
+    # Calculate total results
+    total = sum(len(results[key]) for key in results)
+    
+    return jsonify({
+        'query': query,
+        'total': total,
+        'results': results
+    })
+
+# ============================================
+# SESSION RECORDINGS ROUTES
+# ============================================
+
+@app.route('/session/<int:session_id>/upload-recording', methods=['POST'])
+@login_required
+def upload_recording(session_id):
+    """Upload a session recording (audio/video file)"""
+    conn = get_db()
+    
+    # Verify user is participant
+    rsvp = conn.execute('SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
+                       (session_id, session['user_id'])).fetchone()
+    
+    if not rsvp:
+        conn.close()
+        flash('You must be a participant to upload recordings')
+        return redirect(url_for('detail', session_id=session_id))
+    
+    if 'recording' not in request.files:
+        conn.close()
+        flash('No recording file selected')
+        return redirect(url_for('detail', session_id=session_id))
+    
+    file = request.files['recording']
+    
+    if file.filename == '':
+        conn.close()
+        flash('No recording file selected')
+        return redirect(url_for('detail', session_id=session_id))
+    
+    # Get file extension and validate
+    file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+    allowed_extensions = {'mp3', 'wav', 'ogg', 'webm', 'mp4', 'avi', 'mov', 'm4a'}
+    
+    if file_ext not in allowed_extensions:
+        conn.close()
+        flash('Invalid file type. Allowed: mp3, wav, ogg, webm, mp4, avi, mov, m4a')
+        return redirect(url_for('detail', session_id=session_id))
+    
+    # Generate unique filename
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_filename = f"{timestamp}_{file.filename}"
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], safe_filename)
+    
+    # Save file
+    file.save(filepath)
+    file_size = os.path.getsize(filepath)
+    
+    # Get optional transcription and duration from form
+    transcription = request.form.get('transcription', '')
+    duration = request.form.get('duration', None)
+    recording_type = 'video' if file_ext in {'mp4', 'avi', 'mov', 'webm'} else 'audio'
+    
+    # Save to database
+    conn.execute('''
+        INSERT INTO session_recordings 
+        (session_id, user_id, filename, original_filename, file_size, duration, transcription, recording_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (session_id, session['user_id'], safe_filename, file.filename, file_size, 
+          duration, transcription, recording_type))
+    
+    conn.commit()
+    conn.close()
+    
+    flash(f'{recording_type.capitalize()} recording uploaded successfully!')
+    return redirect(url_for('detail', session_id=session_id))
+
+@app.route('/recording/<int:recording_id>/download')
+@login_required
+def download_recording(recording_id):
+    """Download a session recording"""
+    conn = get_db()
+    recording = conn.execute('''
+        SELECT r.*, s.id as session_id
+        FROM session_recordings r
+        JOIN sessions s ON r.session_id = s.id
+        WHERE r.id = ?
+    ''', (recording_id,)).fetchone()
+    
+    if not recording:
+        conn.close()
+        flash('Recording not found')
+        return redirect(url_for('index'))
+    
+    # Verify user is participant
+    rsvp = conn.execute('SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
+                       (recording['session_id'], session['user_id'])).fetchone()
+    
+    conn.close()
+    
+    if not rsvp:
+        flash('You must be a participant to access recordings')
+        return redirect(url_for('detail', session_id=recording['session_id']))
+    
+    return send_from_directory(app.config['UPLOAD_FOLDER'], recording['filename'],
+                              as_attachment=True, download_name=recording['original_filename'])
+
+@app.route('/recording/<int:recording_id>/delete', methods=['POST'])
+@login_required
+def delete_recording(recording_id):
+    """Delete a session recording"""
+    conn = get_db()
+    recording = conn.execute('SELECT * FROM session_recordings WHERE id = ?', (recording_id,)).fetchone()
+    
+    if not recording:
+        conn.close()
+        flash('Recording not found')
+        return redirect(url_for('index'))
+    
+    session_id = recording['session_id']
+    
+    # Only uploader or session creator can delete
+    study_session = conn.execute('SELECT creator_id FROM sessions WHERE id = ?', (session_id,)).fetchone()
+    
+    if recording['user_id'] == session['user_id'] or study_session['creator_id'] == session['user_id']:
+        # Remove from disk
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], recording['filename'])
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        # Remove from database
+        conn.execute('DELETE FROM session_recordings WHERE id = ?', (recording_id,))
+        conn.commit()
+        flash('Recording deleted successfully')
+    else:
+        flash('You can only delete your own recordings')
+    
+    conn.close()
+    return redirect(url_for('detail', session_id=session_id))
+
+@app.route('/recording/<int:recording_id>/transcription', methods=['POST'])
+@login_required
+def update_transcription(recording_id):
+    """Update or add transcription to a recording"""
+    conn = get_db()
+    recording = conn.execute('SELECT * FROM session_recordings WHERE id = ?', (recording_id,)).fetchone()
+    
+    if not recording:
+        conn.close()
+        return jsonify({'error': 'Recording not found'}), 404
+    
+    # Verify user is uploader or session creator
+    study_session = conn.execute('SELECT creator_id FROM sessions WHERE id = ?',
+                                 (recording['session_id'],)).fetchone()
+    
+    if recording['user_id'] != session['user_id'] and study_session['creator_id'] != session['user_id']:
+        conn.close()
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    transcription = request.json.get('transcription', '')
+    
+    conn.execute('UPDATE session_recordings SET transcription = ? WHERE id = ?',
+                (transcription, recording_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'transcription': transcription})
 
 @app.route('/invitation/<int:invitation_id>/respond', methods=['POST'])
 @login_required
