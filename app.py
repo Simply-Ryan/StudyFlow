@@ -1,5 +1,17 @@
-# Main app redirection file. MESSY SO WATCH OUT
+"""
+StudyFlow - Collaborative Study Session Platform
 
+A comprehensive Flask application for managing study sessions with real-time chat,
+flashcards, notes, analytics, and user profiles.
+
+Author: StudyFlow Team
+Version: 1.15.0
+Date: December 2025
+"""
+
+# ============================================
+# IMPORTS
+# ============================================
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify, make_response
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -12,37 +24,66 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from ics import Calendar, Event
 import atexit
 
+# ============================================
+# APPLICATION CONFIGURATION
+# ============================================
 app = Flask(__name__)
-app.secret_key = 'f47cba5d7844e3b4cc01994acb8de040c559faf14e9284d5530eeb02055d150b' # Generated. Important according to StackOverflow
+
+# Security: Secret key for session management and CSRF protection
+app.secret_key = 'f47cba5d7844e3b4cc01994acb8de040c559faf14e9284d5530eeb02055d150b'
 app.config['SECRET_KEY'] = app.secret_key
+
+# WebSocket: Initialize SocketIO for real-time features
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# Database Configuration
 DATABASE = 'sessions.db'
+
+# File Upload Configuration
 UPLOAD_FOLDER = 'uploads'
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip', 'rar'}
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB limit
+ALLOWED_EXTENSIONS = {
+    # Images
+    'png', 'jpg', 'jpeg', 'gif',
+    # Documents
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt',
+    # Archives
+    'zip', 'rar'
+}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
-# need to create uploads folder for file storage
+# ============================================
+# INITIALIZATION
+# ============================================
+
+# Create uploads directory if it doesn't exist
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# add file_context column if it doesn't exist
 def add_file_context_column():
+    """Add file_context column to files table if not exists (migration helper)"""
     conn = sqlite3.connect(DATABASE)
     try:
         conn.execute("ALTER TABLE files ADD COLUMN file_context TEXT DEFAULT 'study_material'")
         conn.commit()
     except sqlite3.OperationalError:
-        pass  # column already exists
-    conn.close()
+        pass  # Column already exists, skip
+    finally:
+        conn.close()
 
 add_file_context_column()
 
-# decorator to protect routes that need authentication
+# ============================================
+# DECORATORS & UTILITY FUNCTIONS
+# ============================================
+
 def login_required(f):
+    """Decorator to protect routes that require authentication.
+    
+    Redirects unauthenticated users to the login page with a flash message.
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
@@ -51,9 +92,15 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# helper to show countdown to session
 def format_time_remaining(session_date_str):
-    """calculate how much time until session starts"""
+    """Calculate and format the time remaining until a session starts.
+    
+    Args:
+        session_date_str: ISO format datetime string
+        
+    Returns:
+        Human-readable time remaining string (e.g., "In 2 hours", "Starting soon!")
+    """
     if not session_date_str:
         return None
     
@@ -82,11 +129,25 @@ def format_time_remaining(session_date_str):
 app.jinja_env.globals.update(format_time_remaining=format_time_remaining)
 
 def allowed_file(filename):
-    """check if uploaded file type is allowed"""
+    """Check if uploaded file extension is allowed.
+    
+    Args:
+        filename: Name of the file to check
+        
+    Returns:
+        Boolean indicating if file type is permitted
+    """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_file_size_str(size_bytes):
-    """convert bytes to readable size (KB, MB, etc)"""
+    """Convert file size in bytes to human-readable format.
+    
+    Args:
+        size_bytes: File size in bytes
+        
+    Returns:
+        Formatted string (e.g., "2.5 MB", "1.2 GB")
+    """
     for unit in ['B', 'KB', 'MB', 'GB']:
         if size_bytes < 1024.0:
             return f"{size_bytes:.1f} {unit}"
@@ -96,12 +157,28 @@ def get_file_size_str(size_bytes):
 app.jinja_env.globals.update(get_file_size_str=get_file_size_str)
 
 def get_db():
+    """Get database connection with Row factory for dict-like access.
+    
+    Returns:
+        SQLite connection object with row_factory enabled
+    """
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
 
 def create_notification(user_id, notif_type, title, message, link=None):
-    """Helper function to create a notification for a user"""
+    """Create a notification and emit it via WebSocket for real-time delivery.
+    
+    Args:
+        user_id: ID of the user to notify
+        notif_type: Type of notification ('invitation', 'reminder', 'reply', 'mention')
+        title: Notification title
+        message: Notification message body
+        link: Optional URL to link to
+        
+    Returns:
+        ID of the created notification
+    """
     conn = get_db()
     cursor = conn.execute(
         'INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)',
@@ -111,7 +188,7 @@ def create_notification(user_id, notif_type, title, message, link=None):
     conn.commit()
     conn.close()
     
-    # Emit real-time notification via WebSocket
+    # Emit real-time notification via WebSocket to user's personal room
     socketio.emit('new_notification', {
         'id': notif_id,
         'type': notif_type,
@@ -122,15 +199,20 @@ def create_notification(user_id, notif_type, title, message, link=None):
     
     return notif_id
 
+# ============================================
+# MAIN APPLICATION ROUTES
+# ============================================
+
 @app.route('/')
 def index():
+    """Main dashboard showing all study sessions with search and filter options."""
     conn = get_db()
     
-    # grab search and filter params from URL
+    # Extract search and filter parameters from URL query string
     search_query = request.args.get('search', '').strip()
     subject_filter = request.args.get('subject', '').strip()
     
-    # build SQL query dynaMically based on filters
+    # Build dynamic SQL query based on active filters
     query = '''
         SELECT s.*, u.full_name as creator_name 
         FROM sessions s
@@ -195,8 +277,13 @@ def index():
     conn.close()
     return render_template('index.html', sessions=sessions, invitations=invitations, reminders=reminders)
 
+# ============================================
+# AUTHENTICATION ROUTES
+# ============================================
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    """User registration with username, email, and password."""
     if request.method == 'POST':
         username = request.form['username']
         email = request.form['email']
@@ -204,9 +291,12 @@ def register():
         full_name = request.form['full_name']
         
         conn = get_db()
-        # make sure username/email isn't already taken
-        existing_user = conn.execute('SELECT id FROM users WHERE username = ? OR email = ?', 
-                                     (username, email)).fetchone()
+        
+        # Check for existing username or email
+        existing_user = conn.execute(
+            'SELECT id FROM users WHERE username = ? OR email = ?', 
+            (username, email)
+        ).fetchone()
         
         if existing_user:
             flash('Username or email already exists!')
@@ -247,13 +337,19 @@ def login():
 
 @app.route('/logout')
 def logout():
+    """Clear session and log out user."""
     session.clear()
     flash('You have been logged out.')
     return redirect(url_for('index'))
 
+# ============================================
+# SESSION MANAGEMENT ROUTES
+# ============================================
+
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
 def create():
+    """Create a new study session with details like date, subject, location, etc."""
     if request.method == 'POST':
         title = request.form['title']
         session_type = request.form['session_type']
@@ -264,13 +360,20 @@ def create():
         location = request.form.get('location', '')
         
         conn = get_db()
-        cursor = conn.execute('INSERT INTO sessions (title, session_type, subject, session_date, max_participants, meeting_link, location, creator_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                     (title, session_type, subject, session_date, max_participants, meeting_link, location, session['user_id']))
+        cursor = conn.execute(
+            '''INSERT INTO sessions (title, session_type, subject, session_date, 
+               max_participants, meeting_link, location, creator_id) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+            (title, session_type, subject, session_date, max_participants, 
+             meeting_link, location, session['user_id'])
+        )
         session_id = cursor.lastrowid
         
-        # auto-RSVP the creator to their own session
-        conn.execute('INSERT INTO rsvps (session_id, user_id) VALUES (?, ?)',
-                     (session_id, session['user_id']))
+        # Automatically RSVP the creator to their own session
+        conn.execute(
+            'INSERT INTO rsvps (session_id, user_id) VALUES (?, ?)',
+            (session_id, session['user_id'])
+        )
         conn.commit()
         conn.close()
         flash('Study session created successfully!')
@@ -294,6 +397,7 @@ def detail(session_id):
         flash('Session not found!')
         return redirect(url_for('index'))
     
+    # Fetch all RSVPs for this session with user details
     rsvps = conn.execute('''
         SELECT r.*, u.full_name, u.username
         FROM rsvps r
@@ -301,27 +405,34 @@ def detail(session_id):
         WHERE r.session_id = ?
     ''', (session_id,)).fetchall()
     
+    # Handle RSVP submission
     if request.method == 'POST':
         if 'rsvp' in request.form and 'user_id' in session:
-            # check if capacity reached
             current_count = len(rsvps)
             max_participants = study_session['max_participants'] if study_session['max_participants'] else 10
             
-            # prevent duplicate RSVPs
-            user_rsvp = conn.execute('SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
-                                    (session_id, session['user_id'])).fetchone()
+            # Check for duplicate RSVP
+            user_rsvp = conn.execute(
+                'SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
+                (session_id, session['user_id'])
+            ).fetchone()
             
+            # Validate RSVP constraints
             if user_rsvp:
                 flash('You have already RSVP\'d to this session!')
             elif current_count >= max_participants:
                 flash('Sorry, this session is full!')
             else:
-                conn.execute('INSERT INTO rsvps (session_id, user_id) VALUES (?, ?)',
-                             (session_id, session['user_id']))
+                # Create new RSVP
+                conn.execute(
+                    'INSERT INTO rsvps (session_id, user_id) VALUES (?, ?)',
+                    (session_id, session['user_id'])
+                )
                 conn.commit()
                 flash('RSVP submitted successfully!')
         return redirect(url_for('detail', session_id=session_id))
     
+    # Fetch all chat messages for this session
     messages_raw = conn.execute('''
         SELECT m.*, u.full_name, u.username
         FROM messages m
@@ -330,9 +441,10 @@ def detail(session_id):
         ORDER BY m.created_at ASC
     ''', (session_id,)).fetchall()
     
-    # Add reactions and parent info to messages
+    # Enrich messages with reactions and thread context
     messages = []
     for msg in messages_raw:
+        # Fetch reactions aggregated by emoji
         reactions = conn.execute('''
             SELECT emoji, COUNT(*) as count, GROUP_CONCAT(user_id) as user_ids
             FROM message_reactions
@@ -340,7 +452,7 @@ def detail(session_id):
             GROUP BY emoji
         ''', (msg['id'],)).fetchall()
         
-        # Get parent message info if this is a reply
+        # Get parent message context for threaded replies
         parent_info = None
         if msg['parent_message_id']:
             parent = conn.execute('''
@@ -373,7 +485,7 @@ def detail(session_id):
             } for r in reactions]
         })
     
-    # Fetch chat files and add them to messages timeline
+    # Fetch files uploaded in chat context and merge into timeline
     chat_files = conn.execute('''
         SELECT f.*, u.full_name, u.username
         FROM files f
@@ -382,6 +494,7 @@ def detail(session_id):
         ORDER BY f.uploaded_at ASC
     ''', (session_id,)).fetchall()
     
+    # Add chat files to message timeline for chronological display
     for file in chat_files:
         messages.append({
             'id': file['id'],
@@ -397,10 +510,10 @@ def detail(session_id):
             'file_type': file['file_type']
         })
     
-    # Sort all messages and files by timestamp
+    # Create unified timeline: sort messages and chat files chronologically
     messages = sorted(messages, key=lambda x: x['created_at'])
     
-    # fetch only study material files (not chat files)
+    # Fetch study material files separately (displayed in dedicated section)
     files = conn.execute('''
         SELECT f.*, u.full_name, u.username
         FROM files f
@@ -454,20 +567,33 @@ def detail(session_id):
                          is_full=is_full, spots_left=spots_left, user_has_rsvp=user_has_rsvp,
                          is_creator=is_creator, all_users=all_users, files=files, recordings=recordings)
 
+# ============================================
+# MESSAGING ROUTES
+# ============================================
+
 @app.route('/session/<int:session_id>/message', methods=['POST'])
 @login_required
 def post_message(session_id):
+    """Post a new message to a session's chat.
+    
+    Supports threaded replies via parent_message_id.
+    Broadcasts new messages via WebSocket for real-time updates.
+    """
     message_text = request.form.get('message_text', '')
     parent_message_id = request.form.get('parent_message_id', None)
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     if message_text.strip():
         conn = get_db()
-        conn.execute('INSERT INTO messages (session_id, user_id, message_text, parent_message_id) VALUES (?, ?, ?, ?)',
-                     (session_id, session['user_id'], message_text, parent_message_id))
+        
+        # Insert message with optional parent for threading
+        conn.execute(
+            'INSERT INTO messages (session_id, user_id, message_text, parent_message_id) VALUES (?, ?, ?, ?)',
+            (session_id, session['user_id'], message_text, parent_message_id)
+        )
         conn.commit()
         
-        # get the newly created message for AJAX response
+        # Retrieve newly created message with user details for broadcast
         new_message = conn.execute('''
             SELECT m.*, u.full_name, u.username
             FROM messages m
@@ -524,10 +650,20 @@ def post_message(session_id):
 
 @app.route('/session/<int:session_id>/messages')
 def get_messages(session_id):
-    """API endpoint to fetch messages for real-time updates"""
+    """API endpoint to fetch new messages since a given message ID.
+    
+    Args:
+        session_id: ID of the study session
+        last_id (query param): Last message ID client has received
+        
+    Returns:
+        JSON with list of new messages including reactions
+    """
     last_message_id = request.args.get('last_id', 0, type=int)
     
     conn = get_db()
+    
+    # Fetch only messages newer than last_id for efficient polling
     messages = conn.execute('''
         SELECT m.*, u.full_name, u.username
         FROM messages m
@@ -536,7 +672,7 @@ def get_messages(session_id):
         ORDER BY m.created_at ASC
     ''', (session_id, last_message_id)).fetchall()
     
-    # Fetch reactions for each message
+    # Enrich each message with aggregated reactions
     message_list = []
     for msg in messages:
         reactions = conn.execute('''
@@ -568,30 +704,46 @@ def get_messages(session_id):
 @app.route('/message/<int:message_id>/react', methods=['POST'])
 @login_required
 def react_to_message(message_id):
-    """Add or remove a reaction to a message"""
+    """Add or remove an emoji reaction to a chat message.
+    
+    Args:
+        message_id: ID of the message to react to
+        
+    JSON Body:
+        emoji: Emoji character to react with
+        action: 'add', 'remove', or 'toggle' (default: toggle)
+        
+    Returns:
+        JSON with success status and updated reaction counts
+    """
     data = request.get_json()
     emoji = data.get('emoji', '').strip()
-    action = data.get('action', 'toggle')  # 'add', 'remove', or 'toggle'
+    action = data.get('action', 'toggle')
     
     if not emoji:
         return jsonify({'success': False, 'error': 'Emoji is required'}), 400
     
     conn = get_db()
     
-    # Get the message to find its session
-    message = conn.execute('SELECT session_id FROM messages WHERE id = ?', (message_id,)).fetchone()
+    # Validate message exists and get its session for broadcasting
+    message = conn.execute(
+        'SELECT session_id FROM messages WHERE id = ?',
+        (message_id,)
+    ).fetchone()
+    
     if not message:
         conn.close()
         return jsonify({'success': False, 'error': 'Message not found'}), 404
     
     session_id = message['session_id']
     
-    # Check if user already reacted with this emoji
+    # Check if user has already reacted with this emoji
     existing = conn.execute('''
         SELECT id FROM message_reactions 
         WHERE message_id = ? AND user_id = ? AND emoji = ?
     ''', (message_id, session['user_id'], emoji)).fetchone()
     
+    # Toggle logic: remove if exists, add if doesn't
     if action == 'toggle':
         action = 'remove' if existing else 'add'
     
@@ -632,23 +784,36 @@ def react_to_message(message_id):
     
     return jsonify({'success': True, 'data': reaction_data})
 
+# ============================================
+# RSVP & INVITATION ROUTES
+# ============================================
+
 @app.route('/session/<int:session_id>/invite', methods=['POST'])
 @login_required
 def invite_user(session_id):
+    """Send an invitation to another user to join a session.
+    
+    Only the session creator can send invitations.
+    Creates a notification for the invited user.
+    """
     invitee_id = request.form.get('invitee_id')
     
     if invitee_id:
         conn = get_db()
         
         # Verify the current user is the session creator
-        study_session = conn.execute('SELECT creator_id FROM sessions WHERE id = ?', 
-                                     (session_id,)).fetchone()
+        study_session = conn.execute(
+            'SELECT creator_id FROM sessions WHERE id = ?',
+            (session_id,)
+        ).fetchone()
         
         if study_session and study_session['creator_id'] == session['user_id']:
             try:
-                conn.execute('''INSERT INTO invitations (session_id, inviter_id, invitee_id) 
-                               VALUES (?, ?, ?)''',
-                           (session_id, session['user_id'], invitee_id))
+                # Create invitation record
+                conn.execute('''
+                    INSERT INTO invitations (session_id, inviter_id, invitee_id) 
+                    VALUES (?, ?, ?)
+                ''', (session_id, session['user_id'], invitee_id))
                 conn.commit()
                 
                 # Get session details for notification
@@ -673,31 +838,46 @@ def invite_user(session_id):
     
     return redirect(url_for('detail', session_id=session_id))
 
+# ============================================
+# SESSION MANAGEMENT ROUTES
+# ============================================
+
 @app.route('/session/<int:session_id>/delete', methods=['POST'])
 @login_required
 def delete_session(session_id):
+    """Delete a study session and all associated data.
+    
+    Only the session creator can delete the session.
+    Removes all files, messages, RSVPs, and invitations.
+    """
     conn = get_db()
     
     # Verify the current user is the session creator
-    study_session = conn.execute('SELECT creator_id FROM sessions WHERE id = ?', 
-                                 (session_id,)).fetchone()
+    study_session = conn.execute(
+        'SELECT creator_id FROM sessions WHERE id = ?',
+        (session_id,)
+    ).fetchone()
     
     if study_session and study_session['creator_id'] == session['user_id']:
-        # remove uploaded files from disk first
-        files = conn.execute('SELECT filename FROM files WHERE session_id = ?', (session_id,)).fetchall()
+        # Remove uploaded files from disk first
+        files = conn.execute(
+            'SELECT filename FROM files WHERE session_id = ?',
+            (session_id,)
+        ).fetchall()
+        
         for file_record in files:
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], file_record['filename'])
             if os.path.exists(file_path):
                 os.remove(file_path)
         
-        # clean up database records
+        # Clean up all database records associated with this session
         conn.execute('DELETE FROM files WHERE session_id = ?', (session_id,))
         conn.execute('DELETE FROM messages WHERE session_id = ?', (session_id,))
         conn.execute('DELETE FROM rsvps WHERE session_id = ?', (session_id,))
         conn.execute('DELETE FROM invitations WHERE session_id = ?', (session_id,))
-        # Delete the session itself
         conn.execute('DELETE FROM sessions WHERE id = ?', (session_id,))
         conn.commit()
+        
         flash('Study session deleted successfully!')
         conn.close()
         return redirect(url_for('index'))
@@ -709,6 +889,10 @@ def delete_session(session_id):
 @app.route('/session/<int:session_id>/reminder', methods=['POST'])
 @login_required
 def send_reminder(session_id):
+    """Send a reminder message to all session participants.
+    
+    Only the session creator can send reminders.
+    """
     reminder_text = request.form.get('reminder_text', '').strip()
     
     if not reminder_text:
@@ -718,13 +902,17 @@ def send_reminder(session_id):
     conn = get_db()
     
     # Verify the current user is the session creator
-    study_session = conn.execute('SELECT creator_id FROM sessions WHERE id = ?', 
-                                 (session_id,)).fetchone()
+    study_session = conn.execute(
+        'SELECT creator_id FROM sessions WHERE id = ?',
+        (session_id,)
+    ).fetchone()
     
     if study_session and study_session['creator_id'] == session['user_id']:
-        # Insert the reminder
-        conn.execute('INSERT INTO reminders (session_id, reminder_text, sent_by) VALUES (?, ?, ?)',
-                   (session_id, reminder_text, session['user_id']))
+        # Create reminder record
+        conn.execute(
+            'INSERT INTO reminders (session_id, reminder_text, sent_by) VALUES (?, ?, ?)',
+            (session_id, reminder_text, session['user_id'])
+        )
         conn.commit()
         flash(f'Reminder sent to all participants: "{reminder_text}"')
     else:
@@ -736,25 +924,36 @@ def send_reminder(session_id):
 @app.route('/reminder/<int:reminder_id>/dismiss', methods=['POST'])
 @login_required
 def dismiss_reminder(reminder_id):
+    """Mark a reminder as dismissed for the current user."""
     conn = get_db()
     
     try:
-        # mark reminder as dismissed for this user
-        conn.execute('INSERT INTO dismissed_reminders (reminder_id, user_id) VALUES (?, ?)',
-                   (reminder_id, session['user_id']))
+        conn.execute(
+            'INSERT INTO dismissed_reminders (reminder_id, user_id) VALUES (?, ?)',
+            (reminder_id, session['user_id'])
+        )
         conn.commit()
         flash('Reminder dismissed')
     except sqlite3.IntegrityError:
-        # reminder already dismissed
+        # Reminder already dismissed by this user
+        pass
         pass
     
     conn.close()
     return redirect(url_for('index'))
 
+# ============================================
+# NOTIFICATION ROUTES
+# ============================================
+
 @app.route('/notifications')
 @login_required
 def get_notifications():
-    """API endpoint to fetch user's notifications"""
+    """API endpoint to fetch user's recent notifications.
+    
+    Returns:
+        JSON with list of up to 50 most recent notifications
+    """
     conn = get_db()
     notifications = conn.execute('''
         SELECT * FROM notifications 
@@ -814,13 +1013,26 @@ def mark_all_read():
     conn.close()
     return jsonify({'success': True})
 
+# ============================================
+# FILE UPLOAD ROUTES
+# ============================================
+
 @app.route('/session/<int:session_id>/upload', methods=['POST'])
 @login_required
 def upload_file(session_id):
-    # detect if request is AJAX (from JS) or regular form
+    """Upload a file to a study session.
+    
+    Files can be uploaded in two contexts:
+    - 'study_material': Shared study resources (default)
+    - 'chat': Files sent in chat messages
+    
+    Only RSVP'd users can upload files.
+    Broadcasts file to all session participants via WebSocket.
+    """
+    # Detect AJAX vs regular form submission
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
     
-    # get file context (chat or study_material)
+    # Get file context (determines where file appears in UI)
     file_context = request.form.get('file_context', 'study_material')
     
     # validate file exists in request
@@ -1656,10 +1868,18 @@ def review_card():
 # USER PROFILES & SETTINGS
 # ============================================
 
+# ============================================
+# USER PROFILE ROUTES
+# ============================================
+
 @app.route('/profile/<int:user_id>')
 @login_required
 def profile(user_id):
-    """View user profile"""
+    """View a user's profile with stats and recent activity.
+    
+    Shows public information and statistics for any user.
+    Shows additional private information when viewing own profile.
+    """
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -1828,12 +2048,19 @@ def serve_avatar(filename):
 @app.route('/session/<int:session_id>/upload-recording', methods=['POST'])
 @login_required
 def upload_recording(session_id):
-    """Upload a session recording (audio/video file)"""
+    """Upload an audio or video recording of a study session.
+    
+    Supported formats: mp3, wav, ogg, webm, mp4, avi, mov, m4a
+    Only session participants can upload recordings.
+    Optional: include transcription and duration metadata.
+    """
     conn = get_db()
     
-    # Verify user is participant
-    rsvp = conn.execute('SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
-                       (session_id, session['user_id'])).fetchone()
+    # Verify user is a session participant
+    rsvp = conn.execute(
+        'SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
+        (session_id, session['user_id'])
+    ).fetchone()
     
     if not rsvp:
         conn.close()
@@ -1980,10 +2207,24 @@ def update_transcription(recording_id):
     
     return jsonify({'success': True, 'transcription': transcription})
 
+# ============================================
+# INVITATION RESPONSE ROUTE
+# ============================================
+
 @app.route('/invitation/<int:invitation_id>/respond', methods=['POST'])
 @login_required
 def respond_invitation(invitation_id):
-    response = request.form.get('response')  # accept or decline
+    """Accept or decline a session invitation.
+    
+    When accepting:
+    - Verifies session has capacity
+    - Creates RSVP automatically
+    - Marks invitation as accepted
+    
+    When declining:
+    - Simply marks invitation as declined
+    """
+    response = request.form.get('response')  # 'accept' or 'decline'
     
     conn = get_db()
     invitation = conn.execute('''
@@ -2020,13 +2261,25 @@ def respond_invitation(invitation_id):
     conn.close()
     return redirect(url_for('index'))
 
-# check for upcoming sessions and send automatic reminders
+# ============================================
+# BACKGROUND TASK - AUTOMATIC REMINDERS
+# ============================================
+
 def check_and_send_reminders():
-    """background task to check for sessions and send automatic reminders at 1 week, 1 day, 1 hour"""
+    """Background task to send automatic reminders for upcoming sessions.
+    
+    Sends reminders at three intervals:
+    - 1 week before session
+    - 1 day before session  
+    - 1 hour before session
+    
+    Tracks sent reminders to prevent duplicates.
+    Called periodically by background scheduler.
+    """
     conn = get_db()
     now = datetime.now()
     
-    # get all upcoming sessions that haven't been completed yet
+    # Get all future sessions that haven't occurred yet
     sessions = conn.execute('''
         SELECT id, title, session_date, creator_id
         FROM sessions
@@ -2085,10 +2338,19 @@ def check_and_send_reminders():
     
     conn.close()
 
-# NOTES ROUTES
+# ============================================
+# COLLABORATIVE NOTES ROUTES
+# ============================================
 
 @app.route('/notes')
 def notes():
+    """Browse and search notes.
+    
+    Supports filtering by:
+    - Search query (title, description, content)
+    - Subject
+    - View (all, my_notes, public)
+    """
     conn = get_db()
     
     # get search and filter params
@@ -2096,7 +2358,7 @@ def notes():
     subject_filter = request.args.get('subject', '').strip()
     view_filter = request.args.get('view', 'all').strip()  # all, my_notes, public
     
-    # build query based on filters
+    # Build query based on active filters
     query = '''
         SELECT n.*, u.full_name as author_name, u.username as author_username,
                (SELECT COUNT(*) FROM note_comments WHERE note_id = n.id) as comment_count
@@ -2106,7 +2368,7 @@ def notes():
     '''
     params = []
     
-    # view filter
+    # Apply view filter (my notes, public only, or all accessible)
     if 'user_id' in session:
         if view_filter == 'my_notes':
             query += ' AND n.user_id = ?'
@@ -2117,12 +2379,15 @@ def notes():
             query += ' AND (n.is_public = 1 OR n.user_id = ?)'
             params.append(session['user_id'])
     else:
+        # Not logged in: show only public notes
         query += ' AND n.is_public = 1'
     
+    # Apply search filter
     if search_query:
         query += ' AND (n.title LIKE ? OR n.description LIKE ? OR n.content LIKE ?)'
         params.extend([f'%{search_query}%', f'%{search_query}%', f'%{search_query}%'])
     
+    # Apply subject filter
     if subject_filter:
         query += ' AND n.subject = ?'
         params.append(subject_filter)
@@ -2435,13 +2700,16 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_and_send_reminders, trigger="interval", minutes=30)
 scheduler.start()
 
-# shut down scheduler when app exits
+# Shut down scheduler gracefully when app exits
 atexit.register(lambda: scheduler.shutdown())
 
-# WebSocket event handlers
+# ============================================
+# WEBSOCKET EVENT HANDLERS
+# ============================================
+
 @socketio.on('join_session')
 def handle_join_session(data):
-    """User joins a session room for real-time updates"""
+    \"\"\"Handle user joining a session room for real-time chat and updates.\"\"\"
     session_id = data.get('session_id')
     user_id = data.get('user_id')
     user_name = data.get('user_name')
@@ -2449,7 +2717,7 @@ def handle_join_session(data):
     if session_id:
         room = f'session_{session_id}'
         join_room(room)
-        print(f"User {user_name} (ID: {user_id}) joined room: {room}")
+        print(f\"User {user_name} (ID: {user_id}) joined room: {room}\")
         
         # Broadcast user presence to others in the room
         if user_id and user_name:
