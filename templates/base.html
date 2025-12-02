@@ -19,11 +19,11 @@
 <body>
     <nav class="navbar">
         <div class="container">
-            <a href="{{ url_for('index') }}" class="logo">StudyFlow - Learning Together</a>
+            <a href="{{ url_for('index') }}" class="logo">StudyFlow</a>
             
             {% if session.user_id %}
             <div class="search-container">
-                <input type="text" id="globalSearch" class="search-input" placeholder="Search sessions, notes, files..." autocomplete="off">
+                <input type="text" id="globalSearch" class="search-input" placeholder="Search..." autocomplete="off">
                 <i class="fas fa-search search-icon"></i>
                 <div class="search-results" id="searchResults"></div>
             </div>
@@ -36,8 +36,8 @@
             </button>
             <div class="nav-links" id="navLinks">
                 {% if session.user_id %}
-                    <a href="{{ url_for('profile', user_id=session.user_id) }}" class="user-profile-link">
-                        <span class="user-greeting">{{ session.full_name }}</span>
+                    <a href="{{ url_for('profile', user_id=session.user_id) }}" class="user-profile-link" title="{{ session.full_name }}">
+                        <i class="fas fa-user"></i>
                     </a>
                     <a href="{{ url_for('index') }}">Sessions</a>
                     <a href="{{ url_for('notes') }}">Notes</a>
@@ -57,7 +57,7 @@
                             </div>
                         </div>
                     </div>
-                    <a href="{{ url_for('create') }}" class="btn-primary">Create Session</a>
+                    <a href="{{ url_for('create') }}" class="btn-primary">+ Create</a>
                     <a href="{{ url_for('logout') }}" class="btn-secondary">Logout</a>
                 {% else %}
                     <a href="{{ url_for('index') }}">Home</a>
