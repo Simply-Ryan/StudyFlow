@@ -161,6 +161,14 @@
                 </button>
             </div>
         </form>
+        
+        <div class="settings-section logout-section">
+            <h2><i class="fas fa-sign-out-alt"></i> Account</h2>
+            <p class="section-description">Manage your session</p>
+            <a href="{{ url_for('logout') }}" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </div>
     </div>
 </div>
 
@@ -412,6 +420,32 @@
 .form-actions .btn-secondary,
 .form-actions .btn-primary {
     padding: 0.75rem 1.5rem;
+}
+
+.logout-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 2px solid #e2e8f0;
+    text-align: center;
+}
+
+.btn-logout {
+    display: inline-block;
+    padding: 0.75rem 2rem;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+    margin-top: 1rem;
+}
+
+.btn-logout:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
 }
 
 @media (max-width: 768px) {

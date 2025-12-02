@@ -13,9 +13,10 @@
     {% endif %}
 </div>
 
-<section class="filter-section">
-    <h2>Browse Notes</h2>
-    <div class="filter-controls">
+<section class="browse-notes-section">
+    <div class="section-container">
+        <h2>Browse Notes</h2>
+        <div class="filter-controls">
         <form method="GET" action="{{ url_for('notes') }}" id="filterForm">
             <div class="filter-row">
                 <input type="text" name="search" placeholder="Search notes..." value="{{ request.args.get('search', '') }}" id="searchInput">
@@ -43,6 +44,7 @@
                 <a href="{{ url_for('notes') }}" class="btn-secondary">Clear</a>
             </div>
         </form>
+        </div>
     </div>
 </section>
 
@@ -87,6 +89,32 @@
 </section>
 
 <style>
+.browse-notes-section {
+    margin: 2rem 0;
+}
+
+.browse-notes-section .section-container {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+}
+
+.browse-notes-section h2 {
+    color: #2d3748;
+    margin-bottom: 1.5rem;
+    font-size: 1.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.browse-notes-section h2::before {
+    content: '🔍';
+    font-size: 1.5rem;
+}
+
 .notes-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
