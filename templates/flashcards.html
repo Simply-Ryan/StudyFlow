@@ -81,7 +81,7 @@
 
 .page-header h1 {
     font-size: 2rem;
-    color: #2d3748;
+    color: var(--text-primary);
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -95,16 +95,16 @@
 }
 
 .deck-card {
-    background: white;
+    background: var(--card-bg);
     border-radius: 15px;
     padding: 1.5rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
     transition: transform 0.3s, box-shadow 0.3s;
 }
 
 .deck-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+    box-shadow: var(--shadow-lg);
 }
 
 .deck-header {
@@ -117,7 +117,7 @@
 
 .deck-header h3 {
     font-size: 1.25rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin: 0;
     flex: 1;
 }
@@ -132,7 +132,7 @@
 }
 
 .deck-description {
-    color: #718096;
+    color: var(--text-secondary);
     font-size: 0.95rem;
     margin-bottom: 1rem;
     line-height: 1.5;
@@ -145,14 +145,14 @@
     align-items: center;
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .stat-item {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #4a5568;
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
@@ -207,7 +207,7 @@
 }
 
 .btn-view {
-    background: white;
+    background: var(--card-bg);
     color: #667eea;
     border: 2px solid #667eea;
 }
@@ -220,9 +220,9 @@
 .empty-state {
     text-align: center;
     padding: 4rem 2rem;
-    background: white;
+    background: var(--card-bg);
     border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
 }
 
 .empty-icon {
@@ -232,12 +232,12 @@
 }
 
 .empty-state h2 {
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
 }
 
 .empty-state p {
-    color: #718096;
+    color: var(--text-secondary);
     margin-bottom: 2rem;
 }
 

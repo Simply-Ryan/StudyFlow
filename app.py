@@ -26,6 +26,8 @@ import markdown
 import atexit
 from openai import OpenAI
 from config import Config
+from deep_translator import GoogleTranslator
+from langdetect import detect, LangDetectException
 
 # ============================================
 # APPLICATION CONFIGURATION
@@ -229,6 +231,82 @@ def create_notification(user_id, notif_type, title, message, link=None):
     }, room=f'user_{user_id}')
     
     return notif_id
+
+# ============================================
+# TRANSLATION UTILITIES
+# ============================================
+
+def detect_language(text):
+    """Detect the language of a text.
+    
+    Args:
+        text: Text to detect language for
+        
+    Returns:
+        ISO 639-1 language code (e.g., 'en', 'es', 'fr') or None if detection fails
+    """
+    if not text or len(text.strip()) < 3:
+        return None
+    
+    try:
+        return detect(text)
+    except LangDetectException:
+        return None
+
+def translate_text(text, target_lang='en', source_lang='auto'):
+    """Translate text to target language using Google Translate.
+    
+    Args:
+        text: Text to translate
+        target_lang: Target language code (default: 'en')
+        source_lang: Source language code (default: 'auto' for auto-detection)
+        
+    Returns:
+        Translated text or original text if translation fails
+    """
+    if not text or not text.strip():
+        return text
+    
+    try:
+        # Auto-detect source language if not specified
+        if source_lang == 'auto':
+            detected = detect_language(text)
+            if detected == target_lang:
+                # Text is already in target language
+                return text
+            source_lang = detected if detected else 'en'
+        
+        # Don't translate if source and target are the same
+        if source_lang == target_lang:
+            return text
+        
+        # Perform translation
+        translator = GoogleTranslator(source=source_lang, target=target_lang)
+        translated = translator.translate(text)
+        return translated if translated else text
+    except Exception as e:
+        print(f"Translation error: {e}")
+        return text
+
+def get_user_language_preference(user_id):
+    """Get user's preferred language from settings.
+    
+    Args:
+        user_id: User ID
+        
+    Returns:
+        Language code or 'en' as default
+    """
+    conn = get_db()
+    settings = conn.execute(
+        'SELECT preferred_language, auto_translate FROM user_settings WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()
+    conn.close()
+    
+    if settings:
+        return settings['preferred_language'], bool(settings['auto_translate'])
+    return 'en', False
 
 # ============================================
 # MAIN APPLICATION ROUTES
@@ -592,6 +670,15 @@ def detail(session_id):
         user_has_rsvp = any(r['user_id'] == session['user_id'] for r in rsvps)
     
     is_creator = 'user_id' in session and study_session['creator_user_id'] == session['user_id']
+    
+    # Get user's translation preferences
+    preferred_language = 'en'
+    auto_translate = False
+    if 'user_id' in session:
+        preferred_language, auto_translate = get_user_language_preference(session['user_id'])
+        # Store in session for easy access
+        session['preferred_language'] = preferred_language
+        session['auto_translate'] = auto_translate
     
     return render_template('detail.html', study_session=study_session, rsvps=rsvps, messages=messages,
                          current_count=current_count, max_participants=max_participants,
@@ -2050,6 +2137,8 @@ def settings():
         reminder_timing = int(request.form.get('reminder_timing', 1))
         notification_sound = request.form.get('notification_sound', 'default')
         theme = request.form.get('theme', 'purple')
+        preferred_language = request.form.get('preferred_language', 'en')
+        auto_translate = 1 if request.form.get('auto_translate') else 0
         
         # Check if settings exist
         existing = conn.execute('SELECT id FROM user_settings WHERE user_id = ?', 
@@ -2064,20 +2153,23 @@ def settings():
                     message_notifications = ?,
                     reminder_timing = ?,
                     notification_sound = ?,
-                    theme = ?
+                    theme = ?,
+                    preferred_language = ?,
+                    auto_translate = ?
                 WHERE user_id = ?
             ''', (email_notifications, push_notifications, session_reminders, 
                   message_notifications, reminder_timing, notification_sound,
-                  theme, session['user_id']))
+                  theme, preferred_language, auto_translate, session['user_id']))
         else:
             conn.execute('''
                 INSERT INTO user_settings (user_id, email_notifications, push_notifications,
                                           session_reminders, message_notifications,
-                                          reminder_timing, notification_sound, theme)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                          reminder_timing, notification_sound, theme,
+                                          preferred_language, auto_translate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (session['user_id'], email_notifications, push_notifications,
                   session_reminders, message_notifications, reminder_timing,
-                  notification_sound, theme))
+                  notification_sound, theme, preferred_language, auto_translate))
         
         conn.commit()
         conn.close()
@@ -2095,8 +2187,8 @@ def settings():
     if not user_settings:
         conn.execute('''
             INSERT INTO user_settings (user_id, email_notifications, session_reminders, 
-                                      message_notifications, theme)
-            VALUES (?, 1, 1, 1, 'purple')
+                                      message_notifications, theme, preferred_language, auto_translate)
+            VALUES (?, 1, 1, 1, 'purple', 'en', 0)
         ''', (session['user_id'],))
         conn.commit()
         
@@ -2153,6 +2245,55 @@ def get_vapid_public_key():
     # Generate with: python -c "from py_vapid import Vapid; v = Vapid(); v.generate_keys(); print(v.public_key)"
     return jsonify({
         'publicKey': app.config.get('VAPID_PUBLIC_KEY', '')
+    })
+
+# ============================================
+# TRANSLATION API ROUTES
+# ============================================
+
+@app.route('/api/translate', methods=['POST'])
+@login_required
+def api_translate():
+    """Translate text to user's preferred language"""
+    data = request.json
+    text = data.get('text', '')
+    target_lang = data.get('target_lang')
+    
+    if not text:
+        return jsonify({'error': 'No text provided'}), 400
+    
+    # Get user's preferred language if not specified
+    if not target_lang:
+        target_lang, _ = get_user_language_preference(session['user_id'])
+    
+    # Detect source language
+    detected_lang = detect_language(text)
+    
+    # Translate text
+    translated = translate_text(text, target_lang=target_lang)
+    
+    return jsonify({
+        'original': text,
+        'translated': translated,
+        'source_lang': detected_lang,
+        'target_lang': target_lang
+    })
+
+@app.route('/api/detect-language', methods=['POST'])
+@login_required
+def api_detect_language():
+    """Detect the language of a text"""
+    data = request.json
+    text = data.get('text', '')
+    
+    if not text:
+        return jsonify({'error': 'No text provided'}), 400
+    
+    detected = detect_language(text)
+    
+    return jsonify({
+        'text': text,
+        'language': detected
     })
 
 @app.route('/uploads/avatars/<filename>')

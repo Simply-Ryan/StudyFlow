@@ -81,15 +81,15 @@ document.getElementById('avatar').addEventListener('change', function(e) {
 }
 
 .form-card {
-    background: white;
+    background: var(--card-bg);
     border-radius: 15px;
     padding: 2rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
 }
 
 .form-card h1 {
     font-size: 1.75rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 2rem;
     display: flex;
     align-items: center;
@@ -102,7 +102,7 @@ document.getElementById('avatar').addEventListener('change', function(e) {
     gap: 2rem;
     margin-bottom: 2rem;
     padding: 2rem;
-    background: #f7fafc;
+    background: var(--bg-tertiary);
     border-radius: 15px;
 }
 
@@ -145,7 +145,7 @@ document.getElementById('avatar').addEventListener('change', function(e) {
 }
 
 .upload-hint {
-    color: #718096;
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
@@ -156,7 +156,7 @@ document.getElementById('avatar').addEventListener('change', function(e) {
 .form-group label {
     display: block;
     font-weight: 600;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
 }
 
@@ -164,9 +164,11 @@ document.getElementById('avatar').addEventListener('change', function(e) {
 .form-group textarea {
     width: 100%;
     padding: 0.75rem 1rem;
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--border-color);
     border-radius: 10px;
     font-size: 1rem;
+    background: var(--input-bg);
+    color: var(--text-primary);
     transition: all 0.3s;
 }
 
@@ -179,7 +181,7 @@ document.getElementById('avatar').addEventListener('change', function(e) {
 
 .form-hint {
     display: block;
-    color: #a0aec0;
+    color: var(--text-tertiary);
     font-size: 0.85rem;
     margin-top: 0.5rem;
 }

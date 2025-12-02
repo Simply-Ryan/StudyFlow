@@ -94,15 +94,15 @@
 }
 
 .browse-notes-section .section-container {
-    background: white;
+    background: var(--card-bg);
     border-radius: 16px;
     padding: 2rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
     margin-bottom: 2rem;
 }
 
 .browse-notes-section h2 {
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 1.5rem;
     font-size: 1.8rem;
     display: flex;
@@ -123,16 +123,16 @@
 }
 
 .note-card {
-    background: white;
+    background: var(--card-bg);
     border-radius: 10px;
     padding: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-sm);
     transition: transform 0.2s;
 }
 
 .note-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    box-shadow: var(--shadow-md);
 }
 
 .note-header {
@@ -148,7 +148,7 @@
 }
 
 .note-header h3 a {
-    color: #333;
+    color: var(--text-primary);
     text-decoration: none;
 }
 
@@ -157,7 +157,7 @@
 }
 
 .note-description {
-    color: #666;
+    color: var(--text-secondary);
     font-size: 0.9em;
     margin: 10px 0;
     display: -webkit-box;
@@ -172,7 +172,7 @@
     flex-wrap: wrap;
     gap: 15px;
     font-size: 0.85em;
-    color: #666;
+    color: var(--text-secondary);
     margin: 15px 0;
 }
 
@@ -188,7 +188,7 @@
     align-items: center;
     margin-top: 15px;
     padding-top: 15px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--border-color);
 }
 
 .badge-subject {

@@ -113,15 +113,15 @@ tinymce.init({
 .form-container {
     max-width: 800px;
     margin: 40px auto;
-    background: white;
+    background: var(--card-bg);
     padding: 40px;
     border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-md);
 }
 
 .form-container h1 {
     margin-bottom: 30px;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .session-form {
@@ -138,14 +138,14 @@ tinymce.init({
 .form-group label {
     margin-bottom: 8px;
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
     padding: 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 1em;
     font-family: inherit;
@@ -184,7 +184,7 @@ tinymce.init({
 }
 
 .help-text {
-    color: #666;
+    color: var(--text-secondary);
     font-size: 0.85em;
     margin: 5px 0 0 0;
 }

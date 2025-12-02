@@ -168,7 +168,10 @@
                                     <span>Replying to {{ item.parent_info.author }}: "{% if item.parent_info.text|length > 50 %}{{ item.parent_info.text[:50] }}...{% else %}{{ item.parent_info.text }}{% endif %}"</span>
                                 </div>
                             {% endif %}
-                            <div class="message-text markdown-content">{{ item.message_text|markdown|safe }}</div>
+                            <div class="message-text markdown-content" id="message-text-{{ item.id }}" data-original="{{ item.message_text|escape }}">{{ item.message_text|markdown|safe }}</div>
+                            <div class="translation-notice" id="translation-notice-{{ item.id }}" style="display: none;">
+                                <i class="fas fa-language"></i> Translated from <span class="source-lang"></span>
+                            </div>
                             {% if item.reactions %}
                                 <div class="message-reactions">
                                     {% for reaction in item.reactions %}
@@ -188,6 +191,9 @@
                                     </button>
                                     <button class="msg-action-btn reaction-picker-btn" onclick="event.stopPropagation(); showReactionPicker({{ item.id }})" title="React">
                                         <i class="fas fa-smile"></i>
+                                    </button>
+                                    <button class="msg-action-btn translate-btn" id="translate-btn-{{ item.id }}" onclick="toggleTranslation({{ item.id }})" title="Translate">
+                                        <i class="fas fa-language"></i>
                                     </button>
                                 </div>
                             {% endif %}
@@ -1466,6 +1472,117 @@
             alert('Error saving transcription');
         });
     }
+
+    // Translation functionality
+    const translatedMessages = new Set(); // Track which messages are currently translated
+    
+    async function toggleTranslation(messageId) {
+        const messageTextEl = document.getElementById(`message-text-${messageId}`);
+        const translationNotice = document.getElementById(`translation-notice-${messageId}`);
+        const translateBtn = document.getElementById(`translate-btn-${messageId}`);
+        
+        if (!messageTextEl) return;
+        
+        const originalText = messageTextEl.getAttribute('data-original');
+        const isTranslated = translatedMessages.has(messageId);
+        
+        if (isTranslated) {
+            // Revert to original
+            messageTextEl.innerHTML = marked.parse(originalText);
+            translationNotice.style.display = 'none';
+            translateBtn.innerHTML = '<i class="fas fa-language"></i>';
+            translateBtn.title = 'Translate';
+            translatedMessages.delete(messageId);
+        } else {
+            // Translate
+            translateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            translateBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: originalText })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.translated !== originalText) {
+                        messageTextEl.innerHTML = marked.parse(data.translated);
+                        translationNotice.style.display = 'block';
+                        translationNotice.querySelector('.source-lang').textContent = getLanguageName(data.source_lang);
+                        translateBtn.innerHTML = '<i class="fas fa-undo"></i>';
+                        translateBtn.title = 'Show Original';
+                        translatedMessages.add(messageId);
+                    } else {
+                        translateBtn.innerHTML = '<i class="fas fa-language"></i>';
+                        alert('Message is already in your preferred language');
+                    }
+                }
+            } catch (error) {
+                console.error('Translation error:', error);
+                alert('Failed to translate message');
+                translateBtn.innerHTML = '<i class="fas fa-language"></i>';
+            } finally {
+                translateBtn.disabled = false;
+            }
+        }
+    }
+    
+    function getLanguageName(code) {
+        const languages = {
+            'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
+            'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'zh-CN': 'Chinese',
+            'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean', 'ar': 'Arabic', 
+            'hi': 'Hindi', 'nl': 'Dutch', 'pl': 'Polish', 'tr': 'Turkish',
+            'id': 'Indonesian', 'vi': 'Vietnamese', 'th': 'Thai', 'sv': 'Swedish',
+            'da': 'Danish', 'fi': 'Finnish', 'no': 'Norwegian', 'cs': 'Czech',
+            'hu': 'Hungarian', 'ro': 'Romanian', 'el': 'Greek', 'he': 'Hebrew',
+            'uk': 'Ukrainian', 'bg': 'Bulgarian', 'sk': 'Slovak', 'hr': 'Croatian'
+        };
+        return languages[code] || code;
+    }
+    
+    // Auto-translate messages on page load if user has it enabled
+    async function autoTranslateMessages() {
+        const autoTranslateEnabled = {{ 'true' if session.get('auto_translate') else 'false' }};
+        if (!autoTranslateEnabled) return;
+        
+        const messages = document.querySelectorAll('.message-item[data-message-id]');
+        for (const message of messages) {
+            const messageId = message.getAttribute('data-message-id');
+            const messageTextEl = document.getElementById(`message-text-${messageId}`);
+            if (messageTextEl) {
+                const originalText = messageTextEl.getAttribute('data-original');
+                
+                // Detect language
+                try {
+                    const detectResponse = await fetch('/api/detect-language', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: originalText })
+                    });
+                    
+                    if (detectResponse.ok) {
+                        const detectData = await detectResponse.json();
+                        const userLang = '{{ session.get("preferred_language", "en") }}';
+                        
+                        // Only translate if not in user's language
+                        if (detectData.language && detectData.language !== userLang) {
+                            await toggleTranslation(messageId);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Auto-translate error:', error);
+                }
+            }
+        }
+    }
+    
+    // Run auto-translate on page load
+    document.addEventListener('DOMContentLoaded', autoTranslateMessages);
 
     // Calendar integration functions
     function showCalendarOptions(sessionId) {

@@ -231,6 +231,8 @@ CREATE TABLE IF NOT EXISTS user_settings (
     reminder_timing INTEGER DEFAULT 1,
     notification_sound TEXT DEFAULT 'default',
     theme TEXT DEFAULT 'purple',
+    preferred_language TEXT DEFAULT 'en',
+    auto_translate INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

@@ -234,15 +234,15 @@ document.addEventListener('keydown', (e) => {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 2rem;
-    background: white;
+    background: var(--card-bg);
     padding: 1.5rem 2rem;
     border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-lg);
 }
 
 .study-header h1 {
     font-size: 1.75rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
     display: flex;
     align-items: center;
@@ -250,7 +250,7 @@ document.addEventListener('keydown', (e) => {
 }
 
 .study-info {
-    color: #718096;
+    color: var(--text-secondary);
     font-size: 1rem;
 }
 
@@ -284,9 +284,9 @@ document.addEventListener('keydown', (e) => {
     width: 100%;
     height: 100%;
     backface-visibility: hidden;
-    background: white;
+    background: var(--card-bg);
     border-radius: 20px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-lg);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -343,21 +343,21 @@ document.addEventListener('keydown', (e) => {
 }
 
 .study-controls {
-    background: white;
+    background: var(--card-bg);
     padding: 2rem;
     border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-lg);
     text-align: center;
 }
 
 .study-controls h3 {
     font-size: 1.5rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
 }
 
 .rating-hint {
-    color: #718096;
+    color: var(--text-secondary);
     margin-bottom: 1.5rem;
 }
 
@@ -368,8 +368,8 @@ document.addEventListener('keydown', (e) => {
 }
 
 .rating-btn {
-    background: white;
-    border: 2px solid #e2e8f0;
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
     border-radius: 12px;
     padding: 1.5rem 1rem;
     cursor: pointer;
@@ -417,12 +417,12 @@ document.addEventListener('keydown', (e) => {
 .rating-btn span {
     font-weight: 700;
     font-size: 1.1rem;
-    color: #2d3748;
+    color: var(--text-primary);
 }
 
 .rating-btn small {
     font-size: 0.85rem;
-    color: #a0aec0;
+    color: var(--text-tertiary);
 }
 
 .completion-screen {
@@ -433,10 +433,10 @@ document.addEventListener('keydown', (e) => {
 }
 
 .completion-content {
-    background: white;
+    background: var(--card-bg);
     padding: 3rem;
     border-radius: 20px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-lg);
     text-align: center;
     max-width: 600px;
 }
@@ -451,12 +451,12 @@ document.addEventListener('keydown', (e) => {
 
 .completion-content h2 {
     font-size: 2rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
 }
 
 .completion-content > p {
-    color: #718096;
+    color: var(--text-secondary);
     margin-bottom: 2rem;
 }
 
@@ -468,7 +468,7 @@ document.addEventListener('keydown', (e) => {
 }
 
 .stat-box {
-    background: #f7fafc;
+    background: var(--bg-tertiary);
     padding: 1.5rem 1rem;
     border-radius: 12px;
 }
@@ -482,7 +482,7 @@ document.addEventListener('keydown', (e) => {
 
 .stat-label {
     font-size: 0.9rem;
-    color: #718096;
+    color: var(--text-secondary);
 }
 
 .completion-actions {
@@ -492,10 +492,10 @@ document.addEventListener('keydown', (e) => {
 }
 
 .no-cards-study {
-    background: white;
+    background: var(--card-bg);
     padding: 4rem 2rem;
     border-radius: 20px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-lg);
     text-align: center;
 }
 
@@ -507,12 +507,12 @@ document.addEventListener('keydown', (e) => {
 
 .no-cards-study h2 {
     font-size: 2rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
 }
 
 .no-cards-study p {
-    color: #718096;
+    color: var(--text-secondary);
     margin-bottom: 2rem;
 }
 

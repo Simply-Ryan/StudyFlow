@@ -136,6 +136,51 @@
             </div>
             
             <div class="settings-section">
+                <h2><i class="fas fa-language"></i> Language & Translation</h2>
+                <p class="section-description">Set your preferred language for automatic translation</p>
+                
+                <div class="setting-item">
+                    <label for="preferred_language" class="setting-label-block">
+                        <strong>Preferred Language</strong>
+                        <small>Your favorite language for content</small>
+                    </label>
+                    <select id="preferred_language" name="preferred_language" class="theme-select">
+                        <option value="en" {% if not settings.preferred_language or settings.preferred_language == 'en' %}selected{% endif %}>🇺🇸 English</option>
+                        <option value="es" {% if settings.preferred_language == 'es' %}selected{% endif %}>🇪🇸 Español (Spanish)</option>
+                        <option value="fr" {% if settings.preferred_language == 'fr' %}selected{% endif %}>🇫🇷 Français (French)</option>
+                        <option value="de" {% if settings.preferred_language == 'de' %}selected{% endif %}>🇩🇪 Deutsch (German)</option>
+                        <option value="it" {% if settings.preferred_language == 'it' %}selected{% endif %}>🇮🇹 Italiano (Italian)</option>
+                        <option value="pt" {% if settings.preferred_language == 'pt' %}selected{% endif %}>🇵🇹 Português (Portuguese)</option>
+                        <option value="ru" {% if settings.preferred_language == 'ru' %}selected{% endif %}>🇷🇺 Русский (Russian)</option>
+                        <option value="zh-CN" {% if settings.preferred_language == 'zh-CN' %}selected{% endif %}>🇨🇳 中文 (Chinese)</option>
+                        <option value="ja" {% if settings.preferred_language == 'ja' %}selected{% endif %}>🇯🇵 日本語 (Japanese)</option>
+                        <option value="ko" {% if settings.preferred_language == 'ko' %}selected{% endif %}>🇰🇷 한국어 (Korean)</option>
+                        <option value="ar" {% if settings.preferred_language == 'ar' %}selected{% endif %}>🇸🇦 العربية (Arabic)</option>
+                        <option value="hi" {% if settings.preferred_language == 'hi' %}selected{% endif %}>🇮🇳 हिन्दी (Hindi)</option>
+                        <option value="nl" {% if settings.preferred_language == 'nl' %}selected{% endif %}>🇳🇱 Nederlands (Dutch)</option>
+                        <option value="pl" {% if settings.preferred_language == 'pl' %}selected{% endif %}>🇵🇱 Polski (Polish)</option>
+                        <option value="tr" {% if settings.preferred_language == 'tr' %}selected{% endif %}>🇹🇷 Türkçe (Turkish)</option>
+                    </select>
+                </div>
+                
+                <div class="setting-item">
+                    <label class="setting-label">
+                        <input type="checkbox" name="auto_translate" id="autoTranslate"
+                               {% if settings.auto_translate %}checked{% endif %}>
+                        <span class="setting-info">
+                            <strong>Auto-Translate</strong>
+                            <small>Automatically translate messages and notes not in your preferred language</small>
+                        </span>
+                    </label>
+                </div>
+                
+                <div class="translation-info">
+                    <p><i class="fas fa-info-circle"></i> When enabled, content in other languages will be automatically translated</p>
+                    <p><i class="fas fa-undo"></i> You can always revert to the original text by clicking the translate button</p>
+                </div>
+            </div>
+            
+            <div class="settings-section">
                 <h2><i class="fas fa-shield-alt"></i> Privacy</h2>
                 <p class="section-description">Control your privacy settings</p>
                 
@@ -173,15 +218,15 @@
 }
 
 .settings-card {
-    background: white;
+    background: var(--card-bg);
     border-radius: 15px;
     padding: 2rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
 }
 
 .settings-card h1 {
     font-size: 2rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 2rem;
     display: flex;
     align-items: center;
@@ -190,7 +235,7 @@
 
 .settings-section {
     padding: 2rem 0;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 2px solid var(--border-color);
 }
 
 .settings-section:last-of-type {
@@ -199,7 +244,7 @@
 
 .settings-section h2 {
     font-size: 1.4rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
     display: flex;
     align-items: center;
@@ -207,7 +252,7 @@
 }
 
 .section-description {
-    color: #718096;
+    color: var(--text-secondary);
     margin-bottom: 1.5rem;
 }
 
@@ -221,7 +266,7 @@
     gap: 1rem;
     cursor: pointer;
     padding: 1rem;
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--border-color);
     border-radius: 10px;
     transition: all 0.3s;
 }
@@ -244,12 +289,12 @@
 
 .setting-info strong {
     display: block;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.25rem;
 }
 
 .setting-info small {
-    color: #718096;
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
@@ -260,21 +305,23 @@
 
 .setting-label-block strong {
     display: block;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.25rem;
 }
 
 .setting-label-block small {
-    color: #718096;
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
 .theme-select {
     width: 100%;
     padding: 0.75rem 1rem;
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--border-color);
     border-radius: 10px;
     font-size: 1rem;
+    background: var(--input-bg);
+    color: var(--text-primary);
     transition: all 0.3s;
     margin-bottom: 0.5rem;
 }
@@ -286,7 +333,7 @@
 }
 
 .theme-note {
-    color: #a0aec0;
+    color: var(--text-tertiary);
     font-size: 0.85rem;
     display: flex;
     align-items: center;
@@ -294,7 +341,7 @@
 }
 
 .privacy-info {
-    background: #f7fafc;
+    background: var(--bg-tertiary);
     padding: 1.5rem;
     border-radius: 10px;
 }
@@ -303,7 +350,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    color: #4a5568;
+    color: var(--text-secondary);
     margin-bottom: 0.75rem;
 }
 
@@ -375,7 +422,7 @@
     display: flex;
     align-items: center;
     padding: 0.75rem 1rem;
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--border-color);
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s;
@@ -384,7 +431,7 @@
 .timing-option:hover,
 .sound-option:hover {
     border-color: #667eea;
-    background: #f7fafc;
+    background: var(--bg-tertiary);
 }
 
 .timing-option input[type="radio"],
@@ -401,7 +448,7 @@
 .notification-timing {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--border-color);
 }
 
 .form-actions {
@@ -419,7 +466,7 @@
 .logout-section {
     margin-top: 2rem;
     padding-top: 2rem;
-    border-top: 2px solid #e2e8f0;
+    border-top: 2px solid var(--border-color);
     text-align: center;
 }
 
@@ -440,6 +487,25 @@
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
     background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.translation-info {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(102, 126, 234, 0.1);
+    border-left: 4px solid #667eea;
+    border-radius: 6px;
+}
+
+.translation-info p {
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.translation-info i {
+    color: #667eea;
+    margin-right: 0.5rem;
 }
 
 @media (max-width: 768px) {

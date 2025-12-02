@@ -143,10 +143,10 @@
 }
 
 .profile-header {
-    background: white;
+    background: var(--card-bg);
     border-radius: 20px;
     padding: 3rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
     display: flex;
     gap: 2rem;
     align-items: flex-start;
@@ -179,12 +179,12 @@
 
 .profile-info h1 {
     font-size: 2.5rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
 }
 
 .profile-email {
-    color: #718096;
+    color: var(--text-secondary);
     font-size: 1.1rem;
     margin-bottom: 1rem;
     display: flex;
@@ -193,11 +193,11 @@
 }
 
 .profile-bio {
-    color: #4a5568;
+    color: var(--text-secondary);
     line-height: 1.6;
     margin-bottom: 1.5rem;
     padding: 1rem;
-    background: #f7fafc;
+    background: var(--bg-tertiary);
     border-radius: 10px;
 }
 
@@ -214,10 +214,10 @@
 }
 
 .stat-card {
-    background: white;
+    background: var(--card-bg);
     border-radius: 15px;
     padding: 1.5rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -252,12 +252,12 @@
 .stat-number {
     font-size: 2rem;
     font-weight: 700;
-    color: #2d3748;
+    color: var(--text-primary);
 }
 
 .stat-label {
     font-size: 0.9rem;
-    color: #718096;
+    color: var(--text-secondary);
 }
 
 .profile-activity {
@@ -267,15 +267,15 @@
 }
 
 .activity-section {
-    background: white;
+    background: var(--card-bg);
     border-radius: 15px;
     padding: 2rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
 }
 
 .activity-section h2 {
     font-size: 1.5rem;
-    color: #2d3748;
+    color: var(--text-primary);
     margin-bottom: 1.5rem;
     display: flex;
     align-items: center;
@@ -290,7 +290,7 @@
 
 .activity-item {
     padding: 1rem;
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--border-color);
     border-radius: 10px;
     transition: all 0.3s;
 }
@@ -302,7 +302,7 @@
 
 .activity-title {
     font-weight: 600;
-    color: #2d3748;
+    color: var(--text-primary);
     text-decoration: none;
     font-size: 1.1rem;
     display: block;
@@ -317,7 +317,7 @@
     display: flex;
     gap: 1rem;
     font-size: 0.9rem;
-    color: #718096;
+    color: var(--text-secondary);
 }
 
 .activity-subject {
@@ -329,7 +329,7 @@
 
 .no-activity {
     text-align: center;
-    color: #a0aec0;
+    color: var(--text-tertiary);
     padding: 2rem;
     font-style: italic;
 }
