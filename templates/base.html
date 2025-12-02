@@ -19,8 +19,15 @@
     <!-- Theme initialization script (runs immediately to prevent flash) -->
     <script>
         (function() {
-            const savedTheme = localStorage.getItem('studyflow-theme') || 'light';
+            {% if session.user_id %}
+                // For logged-in users, check localStorage or use database setting
+                const savedTheme = localStorage.getItem('studyflow-theme') || '{{ user_theme if user_theme else "dark" }}';
+            {% else %}
+                // For non-logged-in users, default to dark
+                const savedTheme = localStorage.getItem('studyflow-theme') || 'dark';
+            {% endif %}
             document.documentElement.setAttribute('data-theme', savedTheme);
+            localStorage.setItem('studyflow-theme', savedTheme);
         })();
     </script>
 </head>
@@ -52,6 +59,9 @@
                     <a href="{{ url_for('notes') }}">Notes</a>
                     <a href="{{ url_for('flashcards') }}">Flashcards</a>
                     <a href="{{ url_for('analytics') }}">Analytics</a>
+                    <button id="themeToggle" class="theme-toggle-btn" title="Toggle theme" onclick="toggleTheme()">
+                        <i class="fas fa-moon" id="themeIcon"></i>
+                    </button>
                     <a href="{{ url_for('settings') }}"><i class="fas fa-cog"></i></a>
                     <div class="notification-bell" id="notificationBell">
                         <i class="fas fa-bell"></i>
@@ -469,6 +479,43 @@
                 });
             });
         }
+    </script>
+    
+    <!-- Theme Toggle Script -->
+    <script>
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            // Apply theme
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('studyflow-theme', newTheme);
+            
+            // Update icon
+            updateThemeIcon(newTheme);
+            
+            // Save to database if logged in
+            {% if session.user_id %}
+            fetch('/api/settings/theme', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ theme: newTheme })
+            }).catch(err => console.error('Failed to save theme:', err));
+            {% endif %}
+        }
+        
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('themeIcon');
+            if (icon) {
+                icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            }
+        }
+        
+        // Initialize theme icon on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            updateThemeIcon(currentTheme);
+        });
     </script>
 </body>
 </html>

@@ -199,6 +199,22 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+@app.context_processor
+def inject_user_theme():
+    """Inject user theme preference into all templates"""
+    if 'user_id' in session:
+        conn = get_db()
+        user_settings = conn.execute(
+            'SELECT theme FROM user_settings WHERE user_id = ?',
+            (session['user_id'],)
+        ).fetchone()
+        conn.close()
+        
+        if user_settings and user_settings['theme']:
+            return {'user_theme': user_settings['theme']}
+    
+    return {'user_theme': 'dark'}
+
 def create_notification(user_id, notif_type, title, message, link=None):
     """Create a notification and emit it via WebSocket for real-time delivery.
     
@@ -2907,7 +2923,7 @@ def settings():
         message_notifications = 1 if request.form.get('message_notifications') else 0
         reminder_timing = int(request.form.get('reminder_timing', 1))
         notification_sound = request.form.get('notification_sound', 'default')
-        theme = request.form.get('theme', 'purple')
+        theme = request.form.get('theme', 'dark')
         preferred_language = request.form.get('preferred_language', 'en')
         auto_translate = 1 if request.form.get('auto_translate') else 0
         
@@ -2959,7 +2975,7 @@ def settings():
         conn.execute('''
             INSERT INTO user_settings (user_id, email_notifications, session_reminders, 
                                       message_notifications, theme, preferred_language, auto_translate)
-            VALUES (?, 1, 1, 1, 'purple', 'en', 0)
+            VALUES (?, 1, 1, 1, 'dark', 'en', 0)
         ''', (session['user_id'],))
         conn.commit()
         
@@ -2970,6 +2986,22 @@ def settings():
     conn.close()
     
     return render_template('settings.html', settings=user_settings)
+
+@app.route('/api/settings/theme', methods=['POST'])
+@login_required
+def update_theme():
+    """Update user's theme preference"""
+    data = request.get_json()
+    theme = data.get('theme', 'dark')
+    
+    conn = get_db()
+    conn.execute('''
+        UPDATE user_settings SET theme = ? WHERE user_id = ?
+    ''', (theme, session['user_id']))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'theme': theme})
 
 @app.route('/api/push/subscribe', methods=['POST'])
 @login_required

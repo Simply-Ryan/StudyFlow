@@ -124,10 +124,10 @@
                         <small>Choose your preferred color theme</small>
                     </label>
                     <select id="theme" name="theme" class="theme-select">
-                        <option value="light" {% if not settings.theme or settings.theme == 'light' %}selected{% endif %}>
+                        <option value="light" {% if settings.theme == 'light' %}selected{% endif %}>
                             ☀️ Light Mode
                         </option>
-                        <option value="dark" {% if settings.theme == 'dark' %}selected{% endif %}>
+                        <option value="dark" {% if not settings.theme or settings.theme == 'dark' %}selected{% endif %}>
                             🌙 Dark Mode
                         </option>
                     </select>
@@ -670,11 +670,14 @@ function urlBase64ToUint8Array(base64String) {
 document.addEventListener('DOMContentLoaded', function() {
     const themeSelect = document.getElementById('theme');
     
-    // Set initial theme from localStorage
-    const savedTheme = localStorage.getItem('studyflow-theme') || 'light';
+    // Set initial theme from localStorage or server settings
+    const savedTheme = localStorage.getItem('studyflow-theme') || '{{ settings.theme if settings.theme else "dark" }}';
     if (themeSelect) {
         themeSelect.value = savedTheme;
     }
+    
+    // Apply theme on page load
+    document.documentElement.setAttribute('data-theme', savedTheme);
     
     // Handle theme change
     themeSelect.addEventListener('change', function() {
