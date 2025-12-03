@@ -206,6 +206,51 @@
     </div>
     {% endif %}
 
+    <!-- Music Player Widget -->
+    {% if user_has_rsvp or is_creator %}
+    <div class="music-player-widget">
+        <div class="music-header">
+            <h2><i class="fas fa-music"></i> Study Music</h2>
+            <button class="btn-secondary btn-small" onclick="toggleMusicPanel()">
+                <i class="fas fa-list" id="musicPanelIcon"></i>
+            </button>
+        </div>
+        
+        <div class="music-panel" id="musicPanel" style="display: none;">
+            <div class="playlist-selector">
+                <h3>Select Playlist</h3>
+                <div class="playlist-grid" id="playlistGrid">
+                    <!-- Playlists loaded via JavaScript -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="music-controls" id="musicControls" style="display: none;">
+            <div class="now-playing">
+                <i class="fas fa-music music-icon"></i>
+                <div>
+                    <strong id="currentPlaylistName">No music playing</strong>
+                    <small id="currentPlaylistType"></small>
+                </div>
+            </div>
+            <div class="control-buttons">
+                <button class="control-btn" onclick="pauseSessionMusic()" id="pauseBtn" style="display: none;">
+                    <i class="fas fa-pause"></i>
+                </button>
+                <button class="control-btn" onclick="resumeSessionMusic()" id="resumeBtn" style="display: none;">
+                    <i class="fas fa-play"></i>
+                </button>
+                <button class="control-btn stop-btn" onclick="stopSessionMusic()">
+                    <i class="fas fa-stop"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Hidden YouTube player -->
+        <div id="youtubePlayerContainer" style="display: none;"></div>
+    </div>
+    {% endif %}
+
     <div class="study-room-chat">
         <h2>Study Room Chat</h2>
         <p class="chat-description">Ask questions, share notes, or coordinate with your study group!</p>
@@ -2275,7 +2320,232 @@
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
     }
+    
+    // Initialize music player
+    loadPlaylists();
+    checkMusicStatus();
     {% endif %}
+    </script>
+
+    <!-- Music Player JavaScript -->
+    <script>
+    let playlists = [];
+    let currentPlaylistId = null;
+    let ytPlayer = null;
+    
+    // Load YouTube IFrame API
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    const firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    
+    function onYouTubeIframeAPIReady() {
+        console.log('YouTube API ready');
+    }
+    
+    async function loadPlaylists() {
+        try {
+            const response = await fetch('/api/music/playlists');
+            const data = await response.json();
+            
+            if (data.success) {
+                playlists = data.playlists;
+                renderPlaylists();
+            }
+        } catch (error) {
+            console.error('Failed to load playlists:', error);
+        }
+    }
+    
+    function renderPlaylists() {
+        const grid = document.getElementById('playlistGrid');
+        grid.innerHTML = '';
+        
+        playlists.forEach(playlist => {
+            const card = document.createElement('div');
+            card.className = 'playlist-card';
+            card.innerHTML = `
+                <div class="playlist-icon">
+                    <i class="fas fa-${getPlaylistIcon(playlist.playlist_type)}"></i>
+                </div>
+                <div class="playlist-info">
+                    <strong>${playlist.name}</strong>
+                    <small>${playlist.description}</small>
+                    <span class="playlist-duration">${playlist.duration} min</span>
+                </div>
+                <button class="btn-primary btn-small" onclick="playPlaylist(${playlist.id})">
+                    <i class="fas fa-play"></i> Play
+                </button>
+            `;
+            grid.appendChild(card);
+        });
+    }
+    
+    function getPlaylistIcon(type) {
+        const icons = {
+            'lofi': 'headphones',
+            'classical': 'music',
+            'ambient': 'cloud',
+            'white_noise': 'wave-square',
+            'binaural': 'brain'
+        };
+        return icons[type] || 'music';
+    }
+    
+    function toggleMusicPanel() {
+        const panel = document.getElementById('musicPanel');
+        const icon = document.getElementById('musicPanelIcon');
+        
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            icon.className = 'fas fa-times';
+        } else {
+            panel.style.display = 'none';
+            icon.className = 'fas fa-list';
+        }
+    }
+    
+    async function playPlaylist(playlistId) {
+        try {
+            const response = await fetch(`/api/music/session/{{ study_session.id }}/play`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playlist_id: playlistId })
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                toggleMusicPanel(); // Close playlist selector
+                checkMusicStatus(); // Update UI
+            }
+        } catch (error) {
+            console.error('Failed to play playlist:', error);
+            alert('Failed to start music');
+        }
+    }
+    
+    async function checkMusicStatus() {
+        try {
+            const response = await fetch('/api/music/session/{{ study_session.id }}/status');
+            const data = await response.json();
+            
+            if (data.success && data.music) {
+                updateMusicUI(data.music);
+                
+                if (data.music.is_playing) {
+                    initializePlayer(data.music.youtube_url, data.music.current_time);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to check music status:', error);
+        }
+    }
+    
+    function updateMusicUI(music) {
+        document.getElementById('currentPlaylistName').textContent = music.playlist_name;
+        document.getElementById('currentPlaylistType').textContent = music.playlist_type;
+        document.getElementById('musicControls').style.display = 'flex';
+        
+        if (music.is_playing) {
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('resumeBtn').style.display = 'none';
+        } else {
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'inline-block';
+        }
+    }
+    
+    function initializePlayer(youtubeUrl, startTime = 0) {
+        const videoId = extractVideoId(youtubeUrl);
+        
+        if (!ytPlayer) {
+            ytPlayer = new YT.Player('youtubePlayerContainer', {
+                height: '0',
+                width: '0',
+                videoId: videoId,
+                playerVars: {
+                    autoplay: 1,
+                    start: startTime,
+                    controls: 0,
+                    disablekb: 1,
+                    fs: 0,
+                    modestbranding: 1
+                },
+                events: {
+                    onReady: (event) => event.target.playVideo(),
+                    onStateChange: onPlayerStateChange
+                }
+            });
+        } else {
+            ytPlayer.loadVideoById(videoId, startTime);
+        }
+    }
+    
+    function extractVideoId(url) {
+        const match = url.match(/[?&]v=([^&]+)/);
+        return match ? match[1] : url;
+    }
+    
+    function onPlayerStateChange(event) {
+        if (event.data === YT.PlayerState.ENDED) {
+            stopSessionMusic();
+        }
+    }
+    
+    async function pauseSessionMusic() {
+        const currentTime = ytPlayer ? ytPlayer.getCurrentTime() : 0;
+        
+        try {
+            await fetch(`/api/music/session/{{ study_session.id }}/pause`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_time: Math.floor(currentTime) })
+            });
+            
+            if (ytPlayer) ytPlayer.pauseVideo();
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'inline-block';
+        } catch (error) {
+            console.error('Failed to pause music:', error);
+        }
+    }
+    
+    async function resumeSessionMusic() {
+        if (ytPlayer) ytPlayer.playVideo();
+        document.getElementById('pauseBtn').style.display = 'inline-block';
+        document.getElementById('resumeBtn').style.display = 'none';
+    }
+    
+    async function stopSessionMusic() {
+        try {
+            await fetch(`/api/music/session/{{ study_session.id }}/stop`, {
+                method: 'POST'
+            });
+            
+            if (ytPlayer) ytPlayer.stopVideo();
+            document.getElementById('musicControls').style.display = 'none';
+            document.getElementById('currentPlaylistName').textContent = 'No music playing';
+            document.getElementById('currentPlaylistType').textContent = '';
+        } catch (error) {
+            console.error('Failed to stop music:', error);
+        }
+    }
+    
+    // Listen for WebSocket music events
+    socket.on('music_started', (data) => {
+        checkMusicStatus();
+    });
+    
+    socket.on('music_paused', (data) => {
+        if (ytPlayer) ytPlayer.pauseVideo();
+        document.getElementById('pauseBtn').style.display = 'none';
+        document.getElementById('resumeBtn').style.display = 'inline-block';
+    });
+    
+    socket.on('music_stopped', (data) => {
+        if (ytPlayer) ytPlayer.stopVideo();
+        document.getElementById('musicControls').style.display = 'none';
+    });
     </script>
 
     {% if is_creator %}

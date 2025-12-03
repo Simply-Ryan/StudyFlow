@@ -2161,6 +2161,172 @@ def add_group_resource(group_id):
     return jsonify({'success': True, 'resource_id': resource_id})
 
 # ============================================
+# STUDY MUSIC INTEGRATION
+# ============================================
+
+@app.route('/api/music/playlists', methods=['GET'])
+@login_required
+def get_playlists():
+    """Get all available study playlists"""
+    conn = get_db()
+    playlists = conn.execute('''
+        SELECT p.*, 
+               CASE WHEN f.id IS NOT NULL THEN 1 ELSE 0 END as is_favorite
+        FROM study_playlists p
+        LEFT JOIN user_playlist_favorites f ON p.id = f.playlist_id AND f.user_id = ?
+        WHERE p.is_active = 1
+        ORDER BY p.playlist_type, p.name
+    ''', (session['user_id'],)).fetchall()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'playlists': [dict(p) for p in playlists]
+    })
+
+@app.route('/api/music/playlists/<int:playlist_id>/favorite', methods=['POST'])
+@login_required
+def toggle_playlist_favorite(playlist_id):
+    """Toggle playlist favorite status"""
+    conn = get_db()
+    
+    existing = conn.execute('''
+        SELECT id FROM user_playlist_favorites 
+        WHERE user_id = ? AND playlist_id = ?
+    ''', (session['user_id'], playlist_id)).fetchone()
+    
+    if existing:
+        conn.execute('DELETE FROM user_playlist_favorites WHERE user_id = ? AND playlist_id = ?',
+                    (session['user_id'], playlist_id))
+        is_favorite = False
+    else:
+        conn.execute('INSERT INTO user_playlist_favorites (user_id, playlist_id) VALUES (?, ?)',
+                    (session['user_id'], playlist_id))
+        is_favorite = True
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'is_favorite': is_favorite})
+
+@app.route('/api/music/session/<int:session_id>/play', methods=['POST'])
+@login_required
+def play_session_music(session_id):
+    """Start music playback for a session (synced for all participants)"""
+    data = request.get_json()
+    playlist_id = data.get('playlist_id')
+    
+    conn = get_db()
+    
+    # Check if user has access to session
+    rsvp = conn.execute('SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
+                       (session_id, session['user_id'])).fetchone()
+    
+    if not rsvp:
+        conn.close()
+        return jsonify({'success': False, 'error': 'No access to this session'}), 403
+    
+    # Update or create session music record
+    existing = conn.execute('SELECT id FROM session_music WHERE session_id = ?', 
+                          (session_id,)).fetchone()
+    
+    if existing:
+        conn.execute('''
+            UPDATE session_music 
+            SET playlist_id = ?, is_playing = 1, current_time = 0,
+                started_by = ?, started_at = CURRENT_TIMESTAMP
+            WHERE session_id = ?
+        ''', (playlist_id, session['user_id'], session_id))
+    else:
+        conn.execute('''
+            INSERT INTO session_music (session_id, playlist_id, is_playing, started_by)
+            VALUES (?, ?, 1, ?)
+        ''', (session_id, playlist_id, session['user_id']))
+    
+    conn.commit()
+    
+    # Get playlist info
+    playlist = conn.execute('SELECT * FROM study_playlists WHERE id = ?', 
+                          (playlist_id,)).fetchone()
+    conn.close()
+    
+    # Broadcast to all session participants via WebSocket
+    socketio.emit('music_started', {
+        'playlist_id': playlist_id,
+        'playlist_name': playlist['name'],
+        'youtube_url': playlist['youtube_url'],
+        'started_by': session['user_id']
+    }, room=f'session_{session_id}')
+    
+    return jsonify({'success': True, 'message': 'Music started'})
+
+@app.route('/api/music/session/<int:session_id>/pause', methods=['POST'])
+@login_required
+def pause_session_music(session_id):
+    """Pause music playback for a session"""
+    data = request.get_json()
+    current_time = data.get('current_time', 0)
+    
+    conn = get_db()
+    conn.execute('''
+        UPDATE session_music 
+        SET is_playing = 0, current_time = ?
+        WHERE session_id = ?
+    ''', (current_time, session_id))
+    conn.commit()
+    conn.close()
+    
+    # Broadcast pause to all participants
+    socketio.emit('music_paused', {
+        'paused_by': session['user_id'],
+        'current_time': current_time
+    }, room=f'session_{session_id}')
+    
+    return jsonify({'success': True})
+
+@app.route('/api/music/session/<int:session_id>/stop', methods=['POST'])
+@login_required
+def stop_session_music(session_id):
+    """Stop music playback for a session"""
+    conn = get_db()
+    conn.execute('DELETE FROM session_music WHERE session_id = ?', (session_id,))
+    conn.commit()
+    conn.close()
+    
+    # Broadcast stop to all participants
+    socketio.emit('music_stopped', {
+        'stopped_by': session['user_id']
+    }, room=f'session_{session_id}')
+    
+    return jsonify({'success': True})
+
+@app.route('/api/music/session/<int:session_id>/status', methods=['GET'])
+@login_required
+def get_session_music_status(session_id):
+    """Get current music status for a session"""
+    conn = get_db()
+    music_status = conn.execute('''
+        SELECT sm.*, p.name as playlist_name, p.youtube_url, p.playlist_type,
+               u.full_name as started_by_name
+        FROM session_music sm
+        LEFT JOIN study_playlists p ON sm.playlist_id = p.id
+        LEFT JOIN users u ON sm.started_by = u.id
+        WHERE sm.session_id = ?
+    ''', (session_id,)).fetchone()
+    conn.close()
+    
+    if music_status:
+        return jsonify({
+            'success': True,
+            'music': dict(music_status)
+        })
+    else:
+        return jsonify({
+            'success': True,
+            'music': None
+        })
+
+# ============================================
 # ANALYTICS DASHBOARD
 # ============================================
 
