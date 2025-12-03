@@ -585,3 +585,69 @@ INSERT OR IGNORE INTO study_playlists (name, description, playlist_type, youtube
 
 CREATE INDEX IF NOT EXISTS idx_session_music_session ON session_music(session_id);
 CREATE INDEX IF NOT EXISTS idx_user_playlist_favorites_user ON user_playlist_favorites(user_id);
+
+-- AI Resource Recommendations
+CREATE TABLE IF NOT EXISTS ai_recommendations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    session_id INTEGER,
+    recommendation_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    resource_url TEXT,
+    resource_type TEXT,
+    confidence_score REAL DEFAULT 0.0,
+    reasoning TEXT,
+    metadata TEXT,
+    is_read INTEGER DEFAULT 0,
+    is_helpful INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_study_topics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    topic TEXT NOT NULL,
+    category TEXT,
+    proficiency_level TEXT DEFAULT 'beginner',
+    interest_score REAL DEFAULT 0.5,
+    last_studied TIMESTAMP,
+    study_count INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, topic)
+);
+
+CREATE TABLE IF NOT EXISTS recommendation_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recommendation_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    rating INTEGER,
+    feedback_text TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (recommendation_id) REFERENCES ai_recommendations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS learning_patterns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    pattern_type TEXT NOT NULL,
+    pattern_data TEXT NOT NULL,
+    confidence REAL DEFAULT 0.0,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, pattern_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_recommendations_user ON ai_recommendations(user_id);
+CREATE INDEX IF NOT EXISTS idx_ai_recommendations_session ON ai_recommendations(session_id);
+CREATE INDEX IF NOT EXISTS idx_ai_recommendations_created ON ai_recommendations(created_at);
+CREATE INDEX IF NOT EXISTS idx_user_study_topics_user ON user_study_topics(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_study_topics_topic ON user_study_topics(topic);
+CREATE INDEX IF NOT EXISTS idx_recommendation_feedback_rec ON recommendation_feedback(recommendation_id);
+CREATE INDEX IF NOT EXISTS idx_learning_patterns_user ON learning_patterns(user_id);

@@ -206,6 +206,22 @@
     </div>
     {% endif %}
 
+    <!-- AI Recommendations Widget -->
+    {% if user_has_rsvp or is_creator %}
+    <div class="ai-recommendations-widget">
+        <div class="widget-header">
+            <h2><i class="fas fa-brain"></i> AI Study Resources</h2>
+            <button class="btn-primary btn-small" onclick="generateSessionRecommendations()">
+                <i class="fas fa-sparkles"></i> Get Recommendations
+            </button>
+        </div>
+        
+        <div id="sessionRecommendations" class="session-recommendations">
+            <p class="empty-message">Click "Get Recommendations" to receive personalized study resources for this session.</p>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Music Player Widget -->
     {% if user_has_rsvp or is_creator %}
     <div class="music-player-widget">
@@ -2325,6 +2341,75 @@
     loadPlaylists();
     checkMusicStatus();
     {% endif %}
+    
+    // AI Recommendations for Session
+    async function generateSessionRecommendations() {
+        const btn = event.target.closest('button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Generating...';
+        btn.disabled = true;
+        
+        try {
+            const response = await fetch('/api/ai/recommendations/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    session_id: {{ session.id }},
+                    context: 'session'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                displaySessionRecommendations(data.recommendations);
+                showToast('Generated ' + data.recommendations.length + ' recommendations!', 'success');
+            } else {
+                showToast('Failed to generate recommendations: ' + data.error, 'error');
+            }
+        } catch (error) {
+            showToast('Failed to generate recommendations', 'error');
+        } finally {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }
+    }
+    
+    function displaySessionRecommendations(recommendations) {
+        const container = document.getElementById('sessionRecommendations');
+        
+        if (recommendations.length === 0) {
+            container.innerHTML = '<p class="empty-message">No recommendations available.</p>';
+            return;
+        }
+        
+        container.innerHTML = recommendations.map(rec => `
+            <div class="rec-card-small">
+                <div class="rec-header-small">
+                    <i class="fas fa-${getResourceIcon(rec.resource_type)}"></i>
+                    <strong>${rec.title}</strong>
+                </div>
+                <p>${rec.description}</p>
+                ${rec.resource_url ? `
+                    <a href="${rec.resource_url}" target="_blank" class="btn-primary btn-small">
+                        <i class="fas fa-external-link-alt"></i> Open Resource
+                    </a>
+                ` : ''}
+            </div>
+        `).join('');
+    }
+    
+    function getResourceIcon(type) {
+        const icons = {
+            'article': 'newspaper',
+            'video': 'play-circle',
+            'book': 'book',
+            'tool': 'wrench',
+            'course': 'graduation-cap',
+            'technique': 'brain'
+        };
+        return icons[type] || 'file-alt';
+    }
     </script>
 
     <!-- Music Player JavaScript -->

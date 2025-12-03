@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+
+{% block title %}AI Recommendations - StudyFlow{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="recommendations-header">
+        <h1><i class="fas fa-brain"></i> AI-Powered Study Recommendations</h1>
+        <p class="subtitle">Personalized resources and insights based on your learning patterns</p>
+        
+        <div class="header-actions">
+            <button class="btn-primary" onclick="generateRecommendations()">
+                <i class="fas fa-sparkles"></i> Generate New Recommendations
+            </button>
+            <button class="btn-secondary" onclick="analyzeLearningPatterns()">
+                <i class="fas fa-chart-line"></i> Analyze My Patterns
+            </button>
+        </div>
+    </div>
+
+    <!-- Learning Patterns Section -->
+    <div class="patterns-section" id="patternsSection" style="display: none;">
+        <div class="card">
+            <h2><i class="fas fa-lightbulb"></i> Your Learning Patterns</h2>
+            <div id="patternsContent"></div>
+        </div>
+    </div>
+
+    <!-- Recommendations Grid -->
+    <div class="recommendations-section">
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-type="all" onclick="filterRecommendations('all')">
+                All Recommendations
+            </button>
+            <button class="filter-tab" data-type="resource" onclick="filterRecommendations('resource')">
+                Resources
+            </button>
+            <button class="filter-tab" data-type="study_technique" onclick="filterRecommendations('study_technique')">
+                Study Techniques
+            </button>
+            <button class="filter-tab" data-type="schedule" onclick="filterRecommendations('schedule')">
+                Schedule Tips
+            </button>
+        </div>
+
+        <div id="recommendationsGrid" class="recommendations-grid">
+            <div class="loading-spinner">
+                <i class="fas fa-circle-notch fa-spin"></i>
+                <p>Loading recommendations...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Study Topics Section -->
+    <div class="topics-section">
+        <div class="card">
+            <h2><i class="fas fa-book"></i> My Study Topics</h2>
+            <div class="topics-list" id="topicsList"></div>
+            
+            <div class="add-topic-form">
+                <h3>Add New Topic</h3>
+                <form onsubmit="addStudyTopic(event)">
+                    <div class="form-row">
+                        <input type="text" id="newTopic" placeholder="Topic name" required>
+                        <input type="text" id="newCategory" placeholder="Category (optional)">
+                        <select id="newProficiency">
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
+                        </select>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-plus"></i> Add Topic
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentFilter = 'all';
+let recommendations = [];
+
+async function loadRecommendations(type = 'all') {
+    const response = await fetch(`/api/ai/recommendations?type=${type}&limit=20`);
+    const data = await response.json();
+    
+    if (data.success) {
+        recommendations = data.recommendations;
+        renderRecommendations();
+    }
+}
+
+function renderRecommendations() {
+    const grid = document.getElementById('recommendationsGrid');
+    
+    if (recommendations.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-lightbulb fa-3x"></i>
+                <h3>No recommendations yet</h3>
+                <p>Click "Generate New Recommendations" to get personalized study resources</p>
+            </div>
+        `;
+        return;
+    }
+    
+    grid.innerHTML = recommendations.map(rec => `
+        <div class="recommendation-card ${rec.is_read ? 'read' : ''}" data-id="${rec.id}">
+            <div class="rec-header">
+                <div class="rec-type">
+                    <i class="fas fa-${getResourceIcon(rec.resource_type)}"></i>
+                    <span>${rec.resource_type || 'Resource'}</span>
+                </div>
+                <div class="confidence-badge">
+                    ${(rec.confidence_score * 100).toFixed(0)}% match
+                </div>
+            </div>
+            
+            <h3>${rec.title}</h3>
+            <p class="rec-description">${rec.description}</p>
+            
+            ${rec.reasoning ? `
+                <div class="rec-reasoning">
+                    <i class="fas fa-info-circle"></i>
+                    <small>${rec.reasoning}</small>
+                </div>
+            ` : ''}
+            
+            <div class="rec-actions">
+                ${rec.resource_url ? `
+                    <a href="${rec.resource_url}" target="_blank" class="btn-primary btn-small"
+                       onclick="trackFeedback(${rec.id}, 'clicked')">
+                        <i class="fas fa-external-link-alt"></i> Open Resource
+                    </a>
+                ` : ''}
+                
+                <button class="btn-secondary btn-small" onclick="rateRecommendation(${rec.id})">
+                    <i class="fas fa-star"></i> Rate
+                </button>
+                
+                <button class="btn-ghost btn-small" onclick="dismissRecommendation(${rec.id})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            ${rec.is_helpful !== null ? `
+                <div class="rec-status">
+                    <i class="fas fa-${rec.is_helpful ? 'thumbs-up' : 'thumbs-down'}"></i>
+                    ${rec.is_helpful ? 'Marked as helpful' : 'Dismissed'}
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+function getResourceIcon(type) {
+    const icons = {
+        'article': 'newspaper',
+        'video': 'play-circle',
+        'book': 'book',
+        'tool': 'wrench',
+        'course': 'graduation-cap',
+        'technique': 'brain'
+    };
+    return icons[type] || 'file-alt';
+}
+
+function filterRecommendations(type) {
+    currentFilter = type;
+    
+    // Update active tab
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.type === type) {
+            tab.classList.add('active');
+        }
+    });
+    
+    loadRecommendations(type);
+}
+
+async function generateRecommendations() {
+    const btn = event.target.closest('button');
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Generating...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/ai/recommendations/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: 'general' })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('success', data.message);
+            loadRecommendations(currentFilter);
+        } else {
+            showNotification('error', 'Failed to generate recommendations: ' + data.error);
+        }
+    } catch (error) {
+        showNotification('error', 'Failed to generate recommendations');
+    } finally {
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+    }
+}
+
+async function analyzeLearningPatterns() {
+    const btn = event.target.closest('button');
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Analyzing...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/ai/patterns/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            displayLearningPatterns(data.patterns);
+            showNotification('success', 'Learning patterns analyzed successfully');
+        } else {
+            showNotification('error', 'Failed to analyze patterns: ' + data.error);
+        }
+    } catch (error) {
+        showNotification('error', 'Failed to analyze learning patterns');
+    } finally {
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+    }
+}
+
+function displayLearningPatterns(patterns) {
+    const section = document.getElementById('patternsSection');
+    const content = document.getElementById('patternsContent');
+    
+    content.innerHTML = `
+        <div class="patterns-grid">
+            ${patterns.study_time ? `
+                <div class="pattern-item">
+                    <i class="fas fa-clock"></i>
+                    <h4>Optimal Study Time</h4>
+                    <p>${typeof patterns.study_time === 'string' ? patterns.study_time : JSON.stringify(patterns.study_time)}</p>
+                </div>
+            ` : ''}
+            
+            ${patterns.focus_duration ? `
+                <div class="pattern-item">
+                    <i class="fas fa-hourglass-half"></i>
+                    <h4>Focus Duration</h4>
+                    <p>${typeof patterns.focus_duration === 'string' ? patterns.focus_duration : JSON.stringify(patterns.focus_duration)}</p>
+                </div>
+            ` : ''}
+            
+            ${patterns.preferred_subjects ? `
+                <div class="pattern-item">
+                    <i class="fas fa-book-open"></i>
+                    <h4>Preferred Subjects</h4>
+                    <p>${typeof patterns.preferred_subjects === 'string' ? patterns.preferred_subjects : JSON.stringify(patterns.preferred_subjects)}</p>
+                </div>
+            ` : ''}
+            
+            ${patterns.consistency_score !== undefined ? `
+                <div class="pattern-item">
+                    <i class="fas fa-chart-line"></i>
+                    <h4>Consistency Score</h4>
+                    <p>${typeof patterns.consistency_score === 'number' ? patterns.consistency_score + '%' : patterns.consistency_score}</p>
+                </div>
+            ` : ''}
+        </div>
+        
+        ${patterns.recommendations ? `
+            <div class="pattern-recommendations">
+                <h4>AI Insights</h4>
+                <ul>
+                    ${Array.isArray(patterns.recommendations) ? 
+                        patterns.recommendations.map(r => `<li>${r}</li>`).join('') :
+                        `<li>${patterns.recommendations}</li>`
+                    }
+                </ul>
+            </div>
+        ` : ''}
+    `;
+    
+    section.style.display = 'block';
+}
+
+async function trackFeedback(recId, action) {
+    await fetch(`/api/ai/recommendations/${recId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+    });
+}
+
+async function rateRecommendation(recId) {
+    const rating = prompt('Rate this recommendation (1-5 stars):');
+    
+    if (rating && rating >= 1 && rating <= 5) {
+        const response = await fetch(`/api/ai/recommendations/${recId}/feedback`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                action: 'rated',
+                rating: parseInt(rating)
+            })
+        });
+        
+        if (response.ok) {
+            showNotification('success', 'Thank you for your feedback!');
+            loadRecommendations(currentFilter);
+        }
+    }
+}
+
+async function dismissRecommendation(recId) {
+    const response = await fetch(`/api/ai/recommendations/${recId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dismissed' })
+    });
+    
+    if (response.ok) {
+        showNotification('success', 'Recommendation dismissed');
+        loadRecommendations(currentFilter);
+    }
+}
+
+async function loadStudyTopics() {
+    const response = await fetch('/api/ai/topics');
+    const data = await response.json();
+    
+    if (data.success) {
+        const topicsList = document.getElementById('topicsList');
+        
+        if (data.topics.length === 0) {
+            topicsList.innerHTML = '<p class="empty-message">No study topics yet. Add your first topic below!</p>';
+            return;
+        }
+        
+        topicsList.innerHTML = data.topics.map(topic => `
+            <div class="topic-item">
+                <div class="topic-info">
+                    <strong>${topic.topic}</strong>
+                    ${topic.category ? `<span class="topic-category">${topic.category}</span>` : ''}
+                    <span class="topic-level ${topic.proficiency_level}">${topic.proficiency_level}</span>
+                </div>
+                <div class="topic-stats">
+                    <span><i class="fas fa-book"></i> ${topic.study_count} sessions</span>
+                    ${topic.last_studied ? `<span><i class="fas fa-clock"></i> ${new Date(topic.last_studied).toLocaleDateString()}</span>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+async function addStudyTopic(event) {
+    event.preventDefault();
+    
+    const topic = document.getElementById('newTopic').value;
+    const category = document.getElementById('newCategory').value;
+    const proficiency = document.getElementById('newProficiency').value;
+    
+    const response = await fetch('/api/ai/topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, category, proficiency_level: proficiency })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+        showNotification('success', 'Topic added successfully');
+        document.getElementById('newTopic').value = '';
+        document.getElementById('newCategory').value = '';
+        loadStudyTopics();
+    } else {
+        showNotification('error', 'Failed to add topic');
+    }
+}
+
+function showNotification(type, message) {
+    // Reuse existing notification system from base.html
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+        <span>${message}</span>
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => notification.classList.add('show'), 10);
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// Initialize on page load
+loadRecommendations();
+loadStudyTopics();
+</script>
+{% endblock %}

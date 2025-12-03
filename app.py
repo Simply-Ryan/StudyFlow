@@ -2327,6 +2327,389 @@ def get_session_music_status(session_id):
         })
 
 # ============================================
+# AI RESOURCE RECOMMENDATIONS
+# ============================================
+
+@app.route('/api/ai/recommendations', methods=['GET'])
+@login_required
+def get_ai_recommendations():
+    """Get AI-generated recommendations for the user"""
+    recommendation_type = request.args.get('type', 'all')  # 'all', 'resource', 'study_technique', 'schedule'
+    limit = int(request.args.get('limit', 10))
+    
+    conn = get_db()
+    
+    query = '''
+        SELECT r.*, 
+               CASE WHEN f.id IS NOT NULL THEN 1 ELSE 0 END as has_feedback
+        FROM ai_recommendations r
+        LEFT JOIN recommendation_feedback f ON r.id = f.recommendation_id AND f.user_id = ?
+        WHERE r.user_id = ?
+    '''
+    params = [session['user_id'], session['user_id']]
+    
+    if recommendation_type != 'all':
+        query += ' AND r.recommendation_type = ?'
+        params.append(recommendation_type)
+    
+    query += ' ORDER BY r.created_at DESC LIMIT ?'
+    params.append(limit)
+    
+    recommendations = conn.execute(query, params).fetchall()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'recommendations': [dict(r) for r in recommendations]
+    })
+
+@app.route('/api/ai/recommendations/generate', methods=['POST'])
+@login_required
+def generate_ai_recommendations():
+    """Generate new AI recommendations based on user's study history"""
+    data = request.get_json()
+    session_id = data.get('session_id')
+    context_type = data.get('context', 'general')  # 'general', 'session', 'topic'
+    
+    conn = get_db()
+    
+    # Gather user context
+    user_id = session['user_id']
+    
+    # Get user's recent study topics
+    study_topics = conn.execute('''
+        SELECT topic, category, proficiency_level, study_count
+        FROM user_study_topics
+        WHERE user_id = ?
+        ORDER BY last_studied DESC, study_count DESC
+        LIMIT 10
+    ''', (user_id,)).fetchall()
+    
+    # Get recent session history
+    recent_sessions = conn.execute('''
+        SELECT s.title, s.subject, s.description, s.duration
+        FROM sessions s
+        LEFT JOIN rsvps r ON s.id = r.session_id
+        WHERE (s.creator_id = ? OR r.user_id = ?)
+        AND s.start_time >= datetime('now', '-30 days')
+        ORDER BY s.start_time DESC
+        LIMIT 10
+    ''', (user_id, user_id)).fetchall()
+    
+    # Get learning patterns
+    patterns = conn.execute('''
+        SELECT pattern_type, pattern_data
+        FROM learning_patterns
+        WHERE user_id = ?
+    ''', (user_id,)).fetchall()
+    
+    # Build context for AI
+    context = {
+        'study_topics': [dict(t) for t in study_topics],
+        'recent_sessions': [dict(s) for s in recent_sessions],
+        'patterns': {p['pattern_type']: p['pattern_data'] for p in patterns}
+    }
+    
+    # If session-specific, add session details
+    if session_id:
+        session_info = conn.execute('''
+            SELECT title, subject, description, duration
+            FROM sessions WHERE id = ?
+        ''', (session_id,)).fetchone()
+        if session_info:
+            context['current_session'] = dict(session_info)
+    
+    try:
+        # Generate recommendations using OpenAI
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        
+        prompt = f"""You are an AI study advisor. Based on the following student context, provide 5 personalized study resource recommendations.
+
+Context:
+- Study Topics: {json.dumps(context['study_topics'])}
+- Recent Sessions: {json.dumps(context['recent_sessions'])}
+{f"- Current Session: {json.dumps(context['current_session'])}" if session_id and 'current_session' in context else ""}
+
+For each recommendation, provide:
+1. title: Clear, actionable title
+2. description: 2-3 sentence explanation of why this is helpful
+3. resource_url: A real, working URL to the resource (e.g., Khan Academy, YouTube, Coursera, etc.)
+4. resource_type: One of: 'article', 'video', 'book', 'tool', 'course', 'technique'
+5. reasoning: Why this recommendation fits the user's learning profile
+6. confidence: A score from 0.0 to 1.0 indicating recommendation confidence
+
+Format as JSON array of recommendations."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful AI study advisor that provides personalized learning resource recommendations."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        # Parse AI response
+        ai_response = response.choices[0].message.content
+        
+        # Extract JSON from response (handle markdown code blocks)
+        if '```json' in ai_response:
+            ai_response = ai_response.split('```json')[1].split('```')[0].strip()
+        elif '```' in ai_response:
+            ai_response = ai_response.split('```')[1].split('```')[0].strip()
+        
+        recommendations_data = json.loads(ai_response)
+        
+        # Store recommendations in database
+        recommendation_ids = []
+        for rec in recommendations_data:
+            cursor = conn.execute('''
+                INSERT INTO ai_recommendations 
+                (user_id, session_id, recommendation_type, title, description, 
+                 resource_url, resource_type, confidence_score, reasoning)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id,
+                session_id,
+                'resource',
+                rec.get('title', 'Recommended Resource'),
+                rec.get('description', ''),
+                rec.get('resource_url', ''),
+                rec.get('resource_type', 'article'),
+                float(rec.get('confidence', 0.75)),
+                rec.get('reasoning', '')
+            ))
+            recommendation_ids.append(cursor.lastrowid)
+        
+        conn.commit()
+        
+        # Retrieve the stored recommendations
+        placeholders = ','.join('?' * len(recommendation_ids))
+        new_recommendations = conn.execute(f'''
+            SELECT * FROM ai_recommendations
+            WHERE id IN ({placeholders})
+            ORDER BY confidence_score DESC
+        ''', recommendation_ids).fetchall()
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'recommendations': [dict(r) for r in new_recommendations],
+            'message': f'Generated {len(recommendation_ids)} personalized recommendations'
+        })
+        
+    except Exception as e:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/ai/recommendations/<int:rec_id>/feedback', methods=['POST'])
+@login_required
+def submit_recommendation_feedback(rec_id):
+    """Submit feedback on a recommendation"""
+    data = request.get_json()
+    action = data.get('action', 'viewed')  # 'viewed', 'clicked', 'dismissed', 'rated', 'saved'
+    rating = data.get('rating')
+    feedback_text = data.get('feedback')
+    
+    conn = get_db()
+    
+    # Verify recommendation belongs to user
+    rec = conn.execute('''
+        SELECT id FROM ai_recommendations
+        WHERE id = ? AND user_id = ?
+    ''', (rec_id, session['user_id'])).fetchone()
+    
+    if not rec:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Recommendation not found'}), 404
+    
+    # Store feedback
+    conn.execute('''
+        INSERT INTO recommendation_feedback 
+        (recommendation_id, user_id, action, rating, feedback_text)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (rec_id, session['user_id'], action, rating, feedback_text))
+    
+    # Update is_helpful if rated
+    if action == 'rated' and rating is not None:
+        is_helpful = 1 if rating >= 4 else 0
+        conn.execute('''
+            UPDATE ai_recommendations
+            SET is_helpful = ?, is_read = 1
+            WHERE id = ?
+        ''', (is_helpful, rec_id))
+    elif action in ['clicked', 'viewed', 'saved']:
+        conn.execute('''
+            UPDATE ai_recommendations
+            SET is_read = 1
+            WHERE id = ?
+        ''', (rec_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Feedback recorded'
+    })
+
+@app.route('/api/ai/topics', methods=['GET', 'POST'])
+@login_required
+def manage_study_topics():
+    """Get or update user's study topics"""
+    conn = get_db()
+    
+    if request.method == 'GET':
+        topics = conn.execute('''
+            SELECT * FROM user_study_topics
+            WHERE user_id = ?
+            ORDER BY study_count DESC, last_studied DESC
+        ''', (session['user_id'],)).fetchall()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'topics': [dict(t) for t in topics]
+        })
+    
+    else:  # POST - Add/update topic
+        data = request.get_json()
+        topic = data.get('topic')
+        category = data.get('category')
+        proficiency = data.get('proficiency_level', 'beginner')
+        
+        if not topic:
+            conn.close()
+            return jsonify({'success': False, 'error': 'Topic required'}), 400
+        
+        # Upsert topic
+        conn.execute('''
+            INSERT INTO user_study_topics (user_id, topic, category, proficiency_level, last_studied)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, topic) DO UPDATE SET
+                category = excluded.category,
+                proficiency_level = excluded.proficiency_level,
+                last_studied = CURRENT_TIMESTAMP,
+                study_count = study_count + 1
+        ''', (session['user_id'], topic, category, proficiency))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Topic updated'
+        })
+
+@app.route('/api/ai/patterns/analyze', methods=['POST'])
+@login_required
+def analyze_learning_patterns():
+    """Analyze user's learning patterns using AI"""
+    conn = get_db()
+    user_id = session['user_id']
+    
+    # Gather comprehensive user data
+    sessions_data = conn.execute('''
+        SELECT s.title, s.subject, s.duration, s.start_time,
+               COUNT(DISTINCT p.id) as pomodoro_count
+        FROM sessions s
+        LEFT JOIN rsvps r ON s.id = r.session_id
+        LEFT JOIN pomodoro_sessions p ON s.id = p.session_id
+        WHERE (s.creator_id = ? OR r.user_id = ?)
+        AND s.start_time >= datetime('now', '-60 days')
+        GROUP BY s.id
+        ORDER BY s.start_time DESC
+    ''', (user_id, user_id)).fetchall()
+    
+    # Get Pomodoro statistics
+    pomodoro_stats = conn.execute('''
+        SELECT 
+            AVG(duration) as avg_focus_duration,
+            COUNT(*) as total_sessions,
+            SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) as completed_sessions
+        FROM pomodoro_sessions
+        WHERE user_id = ?
+        AND started_at >= datetime('now', '-60 days')
+    ''', (user_id,)).fetchone()
+    
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        
+        prompt = f"""Analyze this student's learning patterns and provide insights:
+
+Study Sessions (last 60 days):
+{json.dumps([dict(s) for s in sessions_data])}
+
+Pomodoro Statistics:
+- Average focus duration: {pomodoro_stats['avg_focus_duration']} minutes
+- Total sessions: {pomodoro_stats['total_sessions']}
+- Completion rate: {(pomodoro_stats['completed_sessions'] / pomodoro_stats['total_sessions'] * 100) if pomodoro_stats['total_sessions'] > 0 else 0}%
+
+Identify:
+1. Optimal study times (best time of day)
+2. Focus duration patterns (ideal session length)
+3. Subject preferences
+4. Consistency metrics
+
+Format as JSON with keys: study_time, focus_duration, preferred_subjects, consistency_score, recommendations"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an AI learning analytics expert."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5,
+            max_tokens=1000
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        # Extract JSON
+        if '```json' in ai_response:
+            ai_response = ai_response.split('```json')[1].split('```')[0].strip()
+        elif '```' in ai_response:
+            ai_response = ai_response.split('```')[1].split('```')[0].strip()
+        
+        patterns_data = json.loads(ai_response)
+        
+        # Store patterns
+        for pattern_type, pattern_value in patterns_data.items():
+            conn.execute('''
+                INSERT INTO learning_patterns (user_id, pattern_type, pattern_data, last_updated)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, pattern_type) DO UPDATE SET
+                    pattern_data = excluded.pattern_data,
+                    last_updated = CURRENT_TIMESTAMP
+            ''', (user_id, pattern_type, json.dumps(pattern_value)))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'patterns': patterns_data
+        })
+        
+    except Exception as e:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/recommendations')
+@login_required
+def recommendations_page():
+    """Display AI recommendations page"""
+    return render_template('recommendations.html')
+
+# ============================================
 # ANALYTICS DASHBOARD
 # ============================================
 
