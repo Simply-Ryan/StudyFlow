@@ -2848,6 +2848,11 @@ def recommendations_page():
     """Display AI recommendations page"""
     return render_template('recommendations.html')
 
+@app.route('/offline')
+def offline():
+    """Offline fallback page for PWA"""
+    return render_template('offline.html')
+
 # ============================================
 # ANALYTICS DASHBOARD
 # ============================================

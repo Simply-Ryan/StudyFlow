@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Offline - StudyFlow{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="offline-page">
+        <div class="offline-icon">
+            <i class="fas fa-wifi-slash"></i>
+        </div>
+        <h1>You're Offline</h1>
+        <p>It looks like you've lost your internet connection. Some features may be limited.</p>
+        
+        <div class="offline-features">
+            <h2>Available Offline:</h2>
+            <ul>
+                <li><i class="fas fa-check-circle"></i> View cached pages</li>
+                <li><i class="fas fa-check-circle"></i> Read downloaded notes</li>
+                <li><i class="fas fa-check-circle"></i> Browse previously visited sessions</li>
+            </ul>
+        </div>
+        
+        <button onclick="window.location.reload()" class="btn-primary btn-large">
+            <i class="fas fa-sync-alt"></i> Try Again
+        </button>
+    </div>
+</div>
+
+<style>
+.offline-page {
+    text-align: center;
+    padding: 4rem 2rem;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.offline-icon {
+    font-size: 5rem;
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+}
+
+.offline-page h1 {
+    color: var(--text-primary);
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.offline-page p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-bottom: 3rem;
+}
+
+.offline-features {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.offline-features h2 {
+    color: var(--text-primary);
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+}
+
+.offline-features ul {
+    list-style: none;
+    padding: 0;
+}
+
+.offline-features li {
+    color: var(--text-secondary);
+    padding: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.offline-features li i {
+    color: #10b981;
+}
+</style>
+{% endblock %}

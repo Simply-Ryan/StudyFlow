@@ -882,6 +882,131 @@ body {
 }
 
 /* ============================================
+   PWA SPECIFIC STYLES
+   ============================================ */
+
+/* PWA Install Button */
+.pwa-install-btn {
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.pwa-install-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.pwa-install-btn.floating {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 9998;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* PWA Update Notification */
+.pwa-update-notification {
+    position: fixed;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+    transition: top 0.3s ease;
+    border: 2px solid #667eea;
+}
+
+.pwa-update-notification.show {
+    top: 2rem;
+}
+
+.pwa-update-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+}
+
+.pwa-update-content i {
+    color: #667eea;
+    font-size: 1.25rem;
+}
+
+.pwa-update-content span {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* PWA Mode Adjustments */
+.pwa-mode {
+    /* Add extra padding for status bar on mobile */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Offline Mode Indicator */
+.offline-mode::before {
+    content: '📴 Offline Mode';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #f59e0b;
+    color: white;
+    text-align: center;
+    padding: 0.5rem;
+    font-weight: 600;
+    z-index: 10000;
+    font-size: 0.9rem;
+}
+
+.offline-mode .navbar {
+    margin-top: 2.5rem;
+}
+
+/* Splash Screen Styles */
+@media (display-mode: standalone) {
+    body {
+        /* Hide address bar on iOS */
+        padding-top: env(safe-area-inset-top);
+    }
+}
+
+/* Loading State for Offline Content */
+.loading-offline {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 50vh;
+    color: var(--text-secondary);
+}
+
+.loading-offline i {
+    font-size: 3rem;
+    color: #667eea;
+    margin-bottom: 1rem;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ============================================
    8. SESSION DETAIL PAGE
    ============================================ */
 
