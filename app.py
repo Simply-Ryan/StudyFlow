@@ -36,9 +36,19 @@ from authlib.integrations.flask_client import OAuth
 app = Flask(__name__)
 
 # Security: Secret key for session management and CSRF protection
-app.secret_key = 'f47cba5d7844e3b4cc01994acb8de040c559faf14e9284d5530eeb02055d150b'
+# Load from environment variable for production, fallback to default for development
+app.secret_key = os.getenv('SECRET_KEY', 'f47cba5d7844e3b4cc01994acb8de040c559faf14e9284d5530eeb02055d150b')
 app.config['SECRET_KEY'] = app.secret_key
 app.config.from_object(Config)
+
+# Security: Set secure session cookie settings for production
+if not app.debug:
+    app.config.update(
+        SESSION_COOKIE_SECURE=True,      # Only send cookie over HTTPS
+        SESSION_COOKIE_HTTPONLY=True,    # Prevent JavaScript access to cookies
+        SESSION_COOKIE_SAMESITE='Lax',   # CSRF protection
+        PERMANENT_SESSION_LIFETIME=timedelta(days=7)  # Session expires after 7 days
+    )
 
 # WebSocket: Initialize SocketIO for real-time features
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -95,6 +105,94 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+# ============================================
+# DATABASE UTILITY FUNCTIONS
+# ============================================
+
+def execute_query(query, params=(), fetchone=False, fetchall=False, commit=False):
+    """Execute a database query with automatic connection management.
+    
+    Args:
+        query: SQL query string
+        params: Query parameters tuple
+        fetchone: Return single row (default False)
+        fetchall: Return all rows (default False)
+        commit: Commit the transaction (default False)
+        
+    Returns:
+        Query result based on fetch parameters, or None
+        
+    Example:
+        # Fetch single row
+        user = execute_query('SELECT * FROM users WHERE id = ?', (user_id,), fetchone=True)
+        
+        # Fetch all rows
+        sessions = execute_query('SELECT * FROM sessions', fetchall=True)
+        
+        # Insert/Update/Delete
+        execute_query('INSERT INTO users (name) VALUES (?)', ('John',), commit=True)
+    """
+    with get_db_connection() as conn:
+        cursor = conn.execute(query, params)
+        
+        if fetchone:
+            return cursor.fetchone()
+        elif fetchall:
+            return cursor.fetchall()
+        elif commit:
+            return cursor.lastrowid
+        return None
+
+def get_user_by_id(user_id):
+    """Get user by ID.
+    
+    Args:
+        user_id: User ID
+        
+    Returns:
+        User dict or None
+    """
+    return execute_query(
+        'SELECT * FROM users WHERE id = ?',
+        (user_id,),
+        fetchone=True
+    )
+
+def get_session_by_id(session_id):
+    """Get study session by ID with creator information.
+    
+    Args:
+        session_id: Session ID
+        
+    Returns:
+        Session dict or None
+    """
+    return execute_query(
+        '''SELECT s.*, u.username as creator_name, u.full_name as creator_full_name
+           FROM sessions s
+           JOIN users u ON s.creator_id = u.id
+           WHERE s.id = ?''',
+        (session_id,),
+        fetchone=True
+    )
+
+def check_user_rsvp(session_id, user_id):
+    """Check if user has RSVP'd to a session.
+    
+    Args:
+        session_id: Session ID
+        user_id: User ID
+        
+    Returns:
+        True if user has RSVP'd, False otherwise
+    """
+    rsvp = execute_query(
+        'SELECT * FROM rsvps WHERE session_id = ? AND user_id = ?',
+        (session_id, user_id),
+        fetchone=True
+    )
+    return rsvp is not None
+
 def add_file_context_column():
     """Add file_context column to files table if not exists (migration helper)"""
     conn = sqlite3.connect(DATABASE)
@@ -115,15 +213,185 @@ add_file_context_column()
 def login_required(f):
     """Decorator to protect routes that require authentication.
     
-    Redirects unauthenticated users to the login page with a flash message.
+    Redirects unauthenticated users to the login page (web routes)
+    or returns 401 JSON response (API routes).
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
+            # Check if this is an API endpoint
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'error': 'Authentication required'}), 401
             flash('Please log in to access this page.')
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
+
+def handle_errors(f):
+    """Decorator to handle common errors in routes.
+    
+    Catches database errors, validation errors, and other exceptions.
+    Returns appropriate JSON responses for API routes or flashes messages for web routes.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except sqlite3.IntegrityError as e:
+            print(f\"IntegrityError in {f.__name__}: {str(e)}\")
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'error': 'Database constraint violation'}), 400
+            flash('Operation failed: duplicate or invalid data', 'error')
+            return redirect(request.referrer or url_for('index'))
+        except ValueError as e:
+            print(f\"ValueError in {f.__name__}: {str(e)}\")
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'error': str(e)}), 400
+            flash(f'Invalid input: {str(e)}', 'error')
+            return redirect(request.referrer or url_for('index'))
+        except Exception as e:
+            print(f\"Unexpected error in {f.__name__}: {str(e)}\")
+            import traceback
+            traceback.print_exc()
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'error': 'Internal server error'}), 500
+            flash('An unexpected error occurred', 'error')
+            return redirect(request.referrer or url_for('index'))
+    return decorated_function
+
+# ============================================
+# INPUT VALIDATION HELPERS
+# ============================================
+
+def validate_string(value, field_name, min_len=1, max_len=None, allow_empty=False):
+    \"\"\"Validate string input.
+    
+    Args:
+        value: The string to validate
+        field_name: Name of the field for error messages
+        min_len: Minimum length (default 1)
+        max_len: Maximum length (optional)
+        allow_empty: Allow empty strings (default False)
+        
+    Returns:
+        Cleaned string value
+        
+    Raises:
+        ValueError: If validation fails
+    \"\"\"
+    if not value and not allow_empty:
+        raise ValueError(f\"{field_name} is required\")
+    
+    if value:
+        value = value.strip()
+        if len(value) < min_len:
+            raise ValueError(f\"{field_name} must be at least {min_len} characters\")
+        if max_len and len(value) > max_len:
+            raise ValueError(f\"{field_name} must be less than {max_len} characters\")
+    
+    return value
+
+def validate_integer(value, field_name, min_val=None, max_val=None):
+    \"\"\"Validate integer input.
+    
+    Args:
+        value: The value to validate
+        field_name: Name of the field for error messages
+        min_val: Minimum value (optional)
+        max_val: Maximum value (optional)
+        
+    Returns:
+        Integer value
+        
+    Raises:
+        ValueError: If validation fails
+    \"\"\"
+    try:
+        val = int(value)
+        if min_val is not None and val < min_val:
+            raise ValueError(f\"{field_name} must be at least {min_val}\")
+        if max_val is not None and val > max_val:
+            raise ValueError(f\"{field_name} must be at most {max_val}\")
+        return val
+    except (TypeError, ValueError):
+        raise ValueError(f\"{field_name} must be a valid integer\")
+
+def sanitize_filename(filename):
+    \"\"\"Sanitize filename to prevent path traversal attacks.
+    
+    Args:
+        filename: Original filename
+        
+    Returns:
+        Sanitized filename
+    \"\"\"
+    # Remove path components and dangerous characters
+    filename = os.path.basename(filename)
+    filename = secure_filename(filename)
+    # Additional safety: remove any remaining path separators
+    filename = filename.replace('/', '').replace('\\\\', '')
+    return filename
+
+# Rate limiting storage (in production, use Redis for distributed rate limiting)
+rate_limit_storage = {}
+
+def rate_limit(max_requests=60, window_seconds=60):
+    """Rate limiting decorator to prevent API abuse.
+    
+    Limits requests per IP address within a time window.
+    
+    Args:
+        max_requests: Maximum number of requests allowed in the window
+        window_seconds: Time window in seconds
+        
+    Returns:
+        Decorator function
+        
+    Example:
+        @rate_limit(max_requests=10, window_seconds=60)  # 10 requests per minute
+        @app.route('/api/endpoint')
+        def my_endpoint():
+            pass
+    """
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            # Get client IP address
+            client_ip = request.remote_addr
+            current_time = datetime.now()
+            
+            # Clean up old entries (optional optimization)
+            if len(rate_limit_storage) > 10000:  # Prevent memory bloat
+                cutoff_time = current_time - timedelta(seconds=window_seconds * 2)
+                rate_limit_storage.clear()  # Simple cleanup, could be more sophisticated
+            
+            # Initialize or get existing record for this IP
+            if client_ip not in rate_limit_storage:
+                rate_limit_storage[client_ip] = []
+            
+            # Remove requests outside the current window
+            rate_limit_storage[client_ip] = [
+                req_time for req_time in rate_limit_storage[client_ip]
+                if (current_time - req_time).total_seconds() < window_seconds
+            ]
+            
+            # Check if rate limit exceeded
+            if len(rate_limit_storage[client_ip]) >= max_requests:
+                if request.path.startswith('/api/'):
+                    return jsonify({
+                        'success': False,
+                        'error': f'Rate limit exceeded. Maximum {max_requests} requests per {window_seconds} seconds.'
+                    }), 429
+                else:
+                    flash(f'Too many requests. Please wait before trying again.', 'danger')
+                    return redirect(url_for('index'))
+            
+            # Record this request
+            rate_limit_storage[client_ip].append(current_time)
+            
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
 
 def format_datetime(dt_str):
     """Format datetime string to 'DD Month Year (Weekday)'
@@ -256,9 +524,36 @@ def get_db():
     Returns:
         SQLite connection object with row_factory enabled
     """
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(
+        DATABASE,
+        detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+    )
     conn.row_factory = sqlite3.Row
+    # Enable foreign keys for referential integrity
+    conn.execute('PRAGMA foreign_keys = ON')
     return conn
+
+from contextlib import contextmanager
+
+@contextmanager
+def get_db_connection():
+    """Context manager for database connections.
+    
+    Automatically handles connection cleanup and error rollback.
+    Usage:
+        with get_db_connection() as conn:
+            conn.execute(...)
+            conn.commit()
+    """
+    conn = get_db()
+    try:
+        yield conn
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 @app.context_processor
 def inject_user_theme():
@@ -468,56 +763,75 @@ def index():
 # ============================================
 
 @app.route('/register', methods=['GET', 'POST'])
+@handle_errors
 def register():
-    """User registration with username, email, and password."""
+    """User registration with username, email, and password validation."""
     if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
-        full_name = request.form['full_name']
-        
-        conn = get_db()
-        
-        # Check for existing username or email
-        existing_user = conn.execute(
-            'SELECT id FROM users WHERE username = ? OR email = ?', 
-            (username, email)
-        ).fetchone()
-        
-        if existing_user:
-            flash('Username or email already exists!')
-            conn.close()
+        # Validate inputs
+        try:
+            username = validate_string(request.form.get('username', ''), 'Username', min_len=3, max_len=50)
+            email = validate_string(request.form.get('email', ''), 'Email', min_len=5, max_len=100)
+            password = validate_string(request.form.get('password', ''), 'Password', min_len=8, max_len=100)
+            full_name = validate_string(request.form.get('full_name', ''), 'Full name', min_len=2, max_len=100)
+            
+            # Basic email format validation
+            if '@' not in email or '.' not in email:
+                raise ValueError('Invalid email format')
+                
+        except ValueError as e:
+            flash(str(e), 'danger')
             return redirect(url_for('register'))
         
-        password_hash = generate_password_hash(password)
-        conn.execute('INSERT INTO users (username, email, password_hash, full_name) VALUES (?, ?, ?, ?)',
-                     (username, email, password_hash, full_name))
-        conn.commit()
-        conn.close()
+        # Use context manager for database operations
+        with get_db_connection() as conn:
+            # Check for existing username or email
+            existing_user = conn.execute(
+                'SELECT id FROM users WHERE username = ? OR email = ?', 
+                (username, email)
+            ).fetchone()
+            
+            if existing_user:
+                flash('Username or email already exists!', 'danger')
+                return redirect(url_for('register'))
+            
+            # Create new user
+            password_hash = generate_password_hash(password)
+            conn.execute(
+                'INSERT INTO users (username, email, password_hash, full_name) VALUES (?, ?, ?, ?)',
+                (username, email, password_hash, full_name)
+            )
         
-        flash('Account created successfully! Please log in.')
+        flash('Account created successfully! Please log in.', 'success')
         return redirect(url_for('login'))
     
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@rate_limit(max_requests=5, window_seconds=60)  # Prevent brute force attacks
+@handle_errors
 def login():
+    """User login with rate limiting and validation."""
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        # Validate inputs
+        try:
+            username = validate_string(request.form.get('username', ''), 'Username', min_len=1, max_len=50)
+            password = validate_string(request.form.get('password', ''), 'Password', min_len=1, max_len=100)
+        except ValueError as e:
+            flash(str(e), 'danger')
+            return redirect(url_for('login'))
         
-        conn = get_db()
-        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-        conn.close()
+        # Use context manager for database operations
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         
         if user and check_password_hash(user['password_hash'], password):
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['full_name'] = user['full_name']
-            flash(f'Welcome back, {user["full_name"]}!')
+            flash(f'Welcome back, {user["full_name"]}!', 'success')
             return redirect(url_for('index'))
         else:
-            flash('Invalid username or password!')
+            flash('Invalid username or password!', 'danger')
     
     return render_template('login.html')
 
@@ -658,206 +972,217 @@ def google_callback():
 
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
+@handle_errors
 def create():
-    """Create a new study session with details like date, subject, location, etc."""
+    """Create a new study session with validation and proper error handling."""
     if request.method == 'POST':
-        title = request.form['title']
-        session_type = request.form['session_type']
-        subject = request.form.get('subject', 'General')
-        session_date = request.form.get('session_date', '')
-        max_participants = request.form.get('max_participants', 10)
-        meeting_link = request.form.get('meeting_link', '')
-        location = request.form.get('location', '')
+        # Validate all form inputs
+        try:
+            title = validate_string(request.form.get('title', ''), 'Title', min_len=3, max_len=200)
+            session_type = validate_string(request.form.get('session_type', ''), 'Session type', min_len=1, max_len=50)
+            subject = validate_string(request.form.get('subject', 'General'), 'Subject', min_len=1, max_len=100)
+            session_date = validate_string(request.form.get('session_date', ''), 'Session date', min_len=1, max_len=50)
+            max_participants = validate_integer(request.form.get('max_participants', 10), 'Max participants', min_val=1, max_val=1000)
+            meeting_link = request.form.get('meeting_link', '').strip()[:500]  # Optional, limit length
+            location = request.form.get('location', '').strip()[:200]  # Optional, limit length
+            
+        except ValueError as e:
+            flash(str(e), 'danger')
+            return redirect(url_for('create'))
         
-        conn = get_db()
-        cursor = conn.execute(
-            '''INSERT INTO sessions (title, session_type, subject, session_date, 
-               max_participants, meeting_link, location, creator_id) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-            (title, session_type, subject, session_date, max_participants, 
-             meeting_link, location, session['user_id'])
-        )
-        session_id = cursor.lastrowid
+        # Use context manager for atomic database operations
+        with get_db_connection() as conn:
+            # Create session
+            cursor = conn.execute(
+                '''INSERT INTO sessions (title, session_type, subject, session_date, 
+                   max_participants, meeting_link, location, creator_id) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                (title, session_type, subject, session_date, max_participants, 
+                 meeting_link, location, session['user_id'])
+            )
+            session_id = cursor.lastrowid
+            
+            # Automatically RSVP the creator to their own session
+            conn.execute(
+                'INSERT INTO rsvps (session_id, user_id) VALUES (?, ?)',
+                (session_id, session['user_id'])
+            )
         
-        # Automatically RSVP the creator to their own session
-        conn.execute(
-            'INSERT INTO rsvps (session_id, user_id) VALUES (?, ?)',
-            (session_id, session['user_id'])
-        )
-        conn.commit()
-        conn.close()
-        flash('Study session created successfully!')
+        flash('Study session created successfully!', 'success')
         return redirect(url_for('detail', session_id=session_id))
     
     return render_template('create.html')
 
 @app.route('/session/<int:session_id>', methods=['GET', 'POST'])
+@handle_errors
 def detail(session_id):
-    conn = get_db()
-    study_session = conn.execute('''
-        SELECT s.*, u.full_name as creator_name, u.id as creator_user_id
-        FROM sessions s
-        LEFT JOIN users u ON s.creator_id = u.id
-        WHERE s.id = ?
-    ''', (session_id,)).fetchone()
-    
-    # verify session exists
-    if not study_session:
-        conn.close()
-        flash('Session not found!')
-        return redirect(url_for('index'))
-    
-    # Fetch all RSVPs for this session with user details
-    rsvps = conn.execute('''
-        SELECT r.*, u.full_name, u.username
-        FROM rsvps r
-        JOIN users u ON r.user_id = u.id
-        WHERE r.session_id = ?
-    ''', (session_id,)).fetchall()
-    
-    # Handle RSVP submission
-    if request.method == 'POST':
-        if 'rsvp' in request.form and 'user_id' in session:
-            current_count = len(rsvps)
+    """Display session details with chat, files, RSVPs using context manager."""
+    # Use context manager for all database operations in this route
+    with get_db_connection() as conn:
+        # Fetch session details with creator information
+        study_session = conn.execute('''
+            SELECT s.*, u.full_name as creator_name, u.id as creator_user_id
+            FROM sessions s
+            LEFT JOIN users u ON s.creator_id = u.id
+            WHERE s.id = ?
+        ''', (session_id,)).fetchone()
+        
+        # Verify session exists
+        if not study_session:
+            flash('Session not found!', 'danger')
+            return redirect(url_for('index'))
+        
+        # Handle RSVP submission (POST request)
+        if request.method == 'POST' and 'rsvp' in request.form and 'user_id' in session:
+            # Fetch current RSVPs to check capacity
+            rsvps_temp = conn.execute('''
+                SELECT r.*, u.full_name, u.username
+                FROM rsvps r
+                JOIN users u ON r.user_id = u.id
+                WHERE r.session_id = ?
+            ''', (session_id,)).fetchall()
+            
+            current_count = len(rsvps_temp)
             max_participants = study_session['max_participants'] if study_session['max_participants'] else 10
             
-            # Check for duplicate RSVP
-            user_rsvp = conn.execute(
-                'SELECT id FROM rsvps WHERE session_id = ? AND user_id = ?',
-                (session_id, session['user_id'])
-            ).fetchone()
-            
-            # Validate RSVP constraints
-            if user_rsvp:
-                flash('You have already RSVP\'d to this session!')
+            # Check if user already has RSVP
+            if check_user_rsvp(session_id, session['user_id']):
+                flash('You have already RSVP\'d to this session!', 'warning')
             elif current_count >= max_participants:
-                flash('Sorry, this session is full!')
+                flash('Sorry, this session is full!', 'danger')
             else:
                 # Create new RSVP
                 conn.execute(
                     'INSERT INTO rsvps (session_id, user_id) VALUES (?, ?)',
                     (session_id, session['user_id'])
                 )
-                conn.commit()
-                flash('RSVP submitted successfully!')
-        return redirect(url_for('detail', session_id=session_id))
-    
-    # Fetch all chat messages for this session
-    messages_raw = conn.execute('''
-        SELECT m.*, u.full_name, u.username
-        FROM messages m
-        JOIN users u ON m.user_id = u.id
-        WHERE m.session_id = ?
-        ORDER BY m.created_at ASC
-    ''', (session_id,)).fetchall()
-    
-    # Enrich messages with reactions and thread context
-    messages = []
-    for msg in messages_raw:
-        # Fetch reactions aggregated by emoji
-        reactions = conn.execute('''
-            SELECT emoji, COUNT(*) as count, GROUP_CONCAT(user_id) as user_ids
-            FROM message_reactions
-            WHERE message_id = ?
-            GROUP BY emoji
-        ''', (msg['id'],)).fetchall()
+                flash('RSVP submitted successfully!', 'success')
+            
+            return redirect(url_for('detail', session_id=session_id))
         
-        # Get parent message context for threaded replies
-        parent_info = None
-        if msg['parent_message_id']:
-            parent = conn.execute('''
-                SELECT m.message_text, u.full_name
-                FROM messages m
-                JOIN users u ON m.user_id = u.id
-                WHERE m.id = ?
-            ''', (msg['parent_message_id'],)).fetchone()
-            if parent:
-                parent_info = {
-                    'id': msg['parent_message_id'],
-                    'text': parent['message_text'],
-                    'author': parent['full_name']
-                }
+        # Fetch all RSVPs for this session with user details
+        rsvps = conn.execute('''
+            SELECT r.*, u.full_name, u.username
+            FROM rsvps r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.session_id = ?
+        ''', (session_id,)).fetchall()
         
-        messages.append({
-            'id': msg['id'],
-            'type': 'message',
-            'full_name': msg['full_name'],
-            'username': msg['username'],
-            'message_text': msg['message_text'],
-            'created_at': msg['created_at'],
-            'user_id': msg['user_id'],
-            'parent_message_id': msg['parent_message_id'],
-            'parent_info': parent_info,
-            'reactions': [{
-                'emoji': r['emoji'],
-                'count': r['count'],
-                'user_ids': [int(uid) for uid in r['user_ids'].split(',')]
-            } for r in reactions]
-        })
-    
-    # Fetch files uploaded in chat context and merge into timeline
-    chat_files = conn.execute('''
-        SELECT f.*, u.full_name, u.username
-        FROM files f
-        JOIN users u ON f.user_id = u.id
-        WHERE f.session_id = ? AND f.file_context = 'chat'
-        ORDER BY f.uploaded_at ASC
-    ''', (session_id,)).fetchall()
-    
-    # Add chat files to message timeline for chronological display
-    for file in chat_files:
-        messages.append({
-            'id': file['id'],
-            'type': 'file',
-            'full_name': file['full_name'],
-            'username': file['username'],
-            'created_at': file['uploaded_at'],
-            'user_id': file['user_id'],
-            'file_id': file['id'],
-            'filename': file['filename'],
-            'original_filename': file['original_filename'],
-            'file_size': file['file_size'],
-            'file_type': file['file_type']
-        })
-    
-    # Create unified timeline: sort messages and chat files chronologically
-    messages = sorted(messages, key=lambda x: x['created_at'])
-    
-    # Fetch study material files separately (displayed in dedicated section)
-    files = conn.execute('''
-        SELECT f.*, u.full_name, u.username
-        FROM files f
-        JOIN users u ON f.user_id = u.id
-        WHERE f.session_id = ? AND (f.file_context IS NULL OR f.file_context = 'study_material')
-        ORDER BY f.uploaded_at DESC
-    ''', (session_id,)).fetchall()
-    
-    # get users for invite dropdown (exclude already invited/joined)
-    all_users = []
-    if 'user_id' in session and study_session['creator_user_id'] == session['user_id']:
-        rsvp_user_ids = [r['user_id'] for r in rsvps]
-        invited_user_ids = [i['invitee_id'] for i in conn.execute(
-            'SELECT invitee_id FROM invitations WHERE session_id = ?', (session_id,)
-        ).fetchall()]
-        excluded_ids = rsvp_user_ids + invited_user_ids + [session['user_id']]
+        # Fetch all chat messages for this session
+        messages_raw = conn.execute('''
+            SELECT m.*, u.full_name, u.username
+            FROM messages m
+            JOIN users u ON m.user_id = u.id
+            WHERE m.session_id = ?
+            ORDER BY m.created_at ASC
+        ''', (session_id,)).fetchall()
         
-        placeholders = ','.join('?' * len(excluded_ids))
-        all_users = conn.execute(f'''
-            SELECT id, full_name, username FROM users 
-            WHERE id NOT IN ({placeholders})
-            ORDER BY full_name
-        ''', excluded_ids).fetchall()
-    
-    # Fetch session recordings
-    recordings = conn.execute('''
-        SELECT r.*, u.full_name, u.username
-        FROM session_recordings r
-        JOIN users u ON r.user_id = u.id
-        WHERE r.session_id = ?
-        ORDER BY r.created_at DESC
-    ''', (session_id,)).fetchall()
-    
-    conn.close()
+        # Enrich messages with reactions and thread context
+        messages = []
+        for msg in messages_raw:
+            # Fetch reactions aggregated by emoji
+            reactions = conn.execute('''
+                SELECT emoji, COUNT(*) as count, GROUP_CONCAT(user_id) as user_ids
+                FROM message_reactions
+                WHERE message_id = ?
+                GROUP BY emoji
+            ''', (msg['id'],)).fetchall()
+            
+            # Get parent message context for threaded replies
+            parent_info = None
+            if msg['parent_message_id']:
+                parent = conn.execute('''
+                    SELECT m.message_text, u.full_name
+                    FROM messages m
+                    JOIN users u ON m.user_id = u.id
+                    WHERE m.id = ?
+                ''', (msg['parent_message_id'],)).fetchone()
+                if parent:
+                    parent_info = {
+                        'id': msg['parent_message_id'],
+                        'text': parent['message_text'],
+                        'author': parent['full_name']
+                    }
+            
+            messages.append({
+                'id': msg['id'],
+                'type': 'message',
+                'full_name': msg['full_name'],
+                'username': msg['username'],
+                'message_text': msg['message_text'],
+                'created_at': msg['created_at'],
+                'user_id': msg['user_id'],
+                'parent_message_id': msg['parent_message_id'],
+                'parent_info': parent_info,
+                'reactions': [{
+                    'emoji': r['emoji'],
+                    'count': r['count'],
+                    'user_ids': [int(uid) for uid in r['user_ids'].split(',')]
+                } for r in reactions]
+            })
+        
+        # Fetch files uploaded in chat context and merge into timeline
+        chat_files = conn.execute('''
+            SELECT f.*, u.full_name, u.username
+            FROM files f
+            JOIN users u ON f.user_id = u.id
+            WHERE f.session_id = ? AND f.file_context = 'chat'
+            ORDER BY f.uploaded_at ASC
+        ''', (session_id,)).fetchall()
+        
+        # Add chat files to message timeline for chronological display
+        for file in chat_files:
+            messages.append({
+                'id': file['id'],
+                'type': 'file',
+                'full_name': file['full_name'],
+                'username': file['username'],
+                'created_at': file['uploaded_at'],
+                'user_id': file['user_id'],
+                'file_id': file['id'],
+                'filename': file['filename'],
+                'original_filename': file['original_filename'],
+                'file_size': file['file_size'],
+                'file_type': file['file_type']
+            })
+        
+        # Create unified timeline: sort messages and chat files chronologically
+        messages = sorted(messages, key=lambda x: x['created_at'])
+        
+        # Fetch study material files separately (displayed in dedicated section)
+        files = conn.execute('''
+            SELECT f.*, u.full_name, u.username
+            FROM files f
+            JOIN users u ON f.user_id = u.id
+            WHERE f.session_id = ? AND (f.file_context IS NULL OR f.file_context = 'study_material')
+            ORDER BY f.uploaded_at DESC
+        ''', (session_id,)).fetchall()
+        
+        # get users for invite dropdown (exclude already invited/joined)
+        all_users = []
+        if 'user_id' in session and study_session['creator_user_id'] == session['user_id']:
+            rsvp_user_ids = [r['user_id'] for r in rsvps]
+            invited_user_ids = [i['invitee_id'] for i in conn.execute(
+                'SELECT invitee_id FROM invitations WHERE session_id = ?', (session_id,)
+            ).fetchall()]
+            excluded_ids = rsvp_user_ids + invited_user_ids + [session['user_id']]
+            
+            placeholders = ','.join('?' * len(excluded_ids))
+            all_users = conn.execute(f'''
+                SELECT id, full_name, username FROM users 
+                WHERE id NOT IN ({placeholders})
+                ORDER BY full_name
+            ''', excluded_ids).fetchall()
+        
+        # Fetch session recordings
+        recordings = conn.execute('''
+            SELECT r.*, u.full_name, u.username
+            FROM session_recordings r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.session_id = ?
+            ORDER BY r.created_at DESC
+        ''', (session_id,)).fetchall()
+    # End of 'with get_db_connection()' context manager - connection auto-closed
     
     # calculate spots remaining
     current_count = len(rsvps)
